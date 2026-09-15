@@ -102,15 +102,16 @@ export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachmen
         copied.forEach((copiedPage) => pdf.addPage(copiedPage));
         continue;
       }
-      page = pdf.addPage([width, height]);
-      drawText(attachment.title, margin, height - 55, 14, true);
-      drawText(`${date(attachment.workDate)}  |  ${attachment.fileName || "Bilde"}`, margin, height - 73, 8, false, muted);
-      if (attachment.description) drawText(attachment.description.slice(0, 100), margin, height - 89, 8, false, muted);
+      if (appendixY < 245) appendixY = appendixPage();
+      drawText(attachment.title, margin, appendixY, 11, true);
+      drawText(`${date(attachment.workDate)}  |  ${attachment.fileName || "Bilde"}`, margin, appendixY - 15, 8, false, muted);
       const embedded = attachment.mimeType === "image/png" ? await pdf.embedPng(attachment.fileData) : await pdf.embedJpg(attachment.fileData);
-      const maxWidth = width - margin * 2, maxHeight = height - 165;
+      const maxWidth = width - margin * 2, maxHeight = Math.min(420, appendixY - 90);
       const scale = Math.min(maxWidth / embedded.width, maxHeight / embedded.height, 1);
       const imageWidth = embedded.width * scale, imageHeight = embedded.height * scale;
-      page.drawImage(embedded, { x: (width - imageWidth) / 2, y: 42 + (maxHeight - imageHeight) / 2, width: imageWidth, height: imageHeight });
+      const imageY = appendixY - 30 - imageHeight;
+      page.drawImage(embedded, { x: (width - imageWidth) / 2, y: imageY, width: imageWidth, height: imageHeight });
+      appendixY = imageY - 30;
     }
   }
 

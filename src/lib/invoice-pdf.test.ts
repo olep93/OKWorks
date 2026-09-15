@@ -14,6 +14,6 @@ describe("invoice PDF", () => {
   it("adds an appendix overview and image page", async () => {
     const png = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"));
     const bytes = await buildInvoicePdf(invoice, lines, [{ title: "Ferdig arbeid", description: "Dokumentasjon", workDate: "2026-09-15", fileName: "ferdig.png", mimeType: "image/png", fileData: png }]);
-    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(3);
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(2);
   });
 });
