@@ -65,6 +65,7 @@ export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachmen
   drawText("Å betale", totalsX, y - 49, 12, true); drawText(money(invoice.totalOre), 455, y - 49, 12, true);
   const account = invoice.bankAccountSnapshot || asText(company.bankAccount);
   if (account) drawText(`Betales til konto ${account}`, margin, 85, 9, true);
+  if ((invoice as Invoice & { kid?: string | null }).kid) drawText(`KID ${(invoice as Invoice & { kid?: string | null }).kid}`, margin, 69, 9, true);
   const contact = [asText(company.invoiceEmail) || asText(company.email), asText(company.invoicePhone) || asText(company.phone)].filter(Boolean).join("  |  ");
   drawText(contact, margin, 55, 8, false, muted);
   drawText(company.organizationNumber ? `Org.nr. ${asText(company.organizationNumber)}` : "", width - margin - 115, 55, 8, false, muted);

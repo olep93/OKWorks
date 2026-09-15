@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { sqlClient } from "@/lib/db/client";
 import { checkInvoicePreflight } from "@/lib/invoice-preflight";
+import { createKid } from "@/lib/kid";
 
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -22,8 +23,9 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
       await tx`INSERT INTO invoice_sequences (organization_id, next_number) VALUES (${user.organizationId}, 1001) ON CONFLICT (organization_id) DO NOTHING`;
       const sequenceRows = await tx`SELECT next_number FROM invoice_sequences WHERE organization_id = ${user.organizationId} FOR UPDATE`;
       const invoiceNumber = Number(sequenceRows[0].next_number);
+      const kid = createKid(invoiceNumber);
       await tx`UPDATE invoice_sequences SET next_number = ${invoiceNumber + 1}, updated_at = now() WHERE organization_id = ${user.organizationId}`;
-      const finalizedRows = await tx`UPDATE invoices SET invoice_number = ${invoiceNumber}, status = 'FINALIZED', finalized_at = now(), remaining_amount_ore = total_ore, updated_at = now() WHERE id = ${id} RETURNING *`;
+      const finalizedRows = await tx`UPDATE invoices SET invoice_number = ${invoiceNumber}, kid = ${kid}, status = 'FINALIZED', finalized_at = now(), remaining_amount_ore = total_ore, updated_at = now() WHERE id = ${id} RETURNING *`;
       await tx`UPDATE time_entries t SET billing_status = 'INVOICED', invoice_line_id = l.id, updated_at = now() FROM invoice_lines l WHERE l.invoice_id = ${id} AND l.source_type = 'TIME' AND l.source_id = t.id`;
       await tx`UPDATE order_entries e SET billing_status = 'INVOICED', updated_at = now() FROM invoice_lines l WHERE l.invoice_id = ${id} AND l.source_id = e.id`;
       await tx`UPDATE orders SET status = 'INVOICED', updated_at = now() WHERE id = ${invoice.source_order_id} AND organization_id = ${user.organizationId}`;

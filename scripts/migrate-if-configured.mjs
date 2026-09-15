@@ -7,7 +7,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 const sql = postgres(process.env.DATABASE_URL, { prepare: false, max: 1 });
-const migrations = ["0000_initial_portal", "0001_order_entries", "0002_invoices", "0003_invoice_finalization", "0004_order_entry_files"];
+const migrations = ["0000_initial_portal", "0001_order_entries", "0002_invoices", "0003_invoice_finalization", "0004_order_entry_files", "0005_payment_reconciliation"];
 
 try {
   await sql`CREATE TABLE IF NOT EXISTS okworks_migrations (
