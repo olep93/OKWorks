@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle,
+  Banknote,
   Building2,
   Camera,
   Car,
@@ -73,6 +74,7 @@ type Screen =
   | "order"
   | "invoices"
   | "invoice"
+  | "bank"
   | "settings";
 type EntryKind =
   | "LINE"
@@ -436,6 +438,13 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
             Produkter & tjenester
           </button>
           <button
+            className={`nav-button ${screen === "bank" ? "active" : ""}`}
+            onClick={() => navigate("bank")}
+          >
+            <Banknote />
+            Bank og betaling
+          </button>
+          <button
             className={`nav-button ${screen === "settings" ? "active" : ""}`}
             onClick={() => navigate("settings")}
           >
@@ -475,7 +484,9 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
                 ? "Dashboard"
                 : screen === "customers"
                   ? "Kunder"
-                  : screen === "settings"
+                  : screen === "bank"
+                    ? "Bank og betaling"
+                    : screen === "settings"
                     ? "Firmaprofil"
                     : screen === "orders"
                       ? "Ordre"
@@ -492,6 +503,8 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
             <div className="empty-state">
               <p>Laster arbeidsområdet…</p>
             </div>
+          ) : screen === "bank" ? (
+            <BankScreen />
           ) : screen === "settings" ? (
             <SettingsScreen onSaved={setToast} />
           ) : screen === "invoices" ? (
@@ -1755,6 +1768,15 @@ function InvoiceScreen({
       </div>
     </div>
   );
+}
+
+function BankScreen() {
+  type BankData = { configured: boolean; provider: string; mode: string; connections: Array<{ id: string; status: string; account_number_masked: string | null; consent_expires_at: string | null; last_synced_at: string | null }> };
+  const [data, setData] = useState<BankData | null>(null);
+  useEffect(() => { fetch("/api/bank", { cache: "no-store" }).then((response) => response.json()).then(setData); }, []);
+  if (!data) return <section className="panel empty-state"><p>Laster bankstatus…</p></section>;
+  const active = data.connections.find((connection) => connection.status === "CONNECTED");
+  return <><div className="page-heading"><div><p className="eyebrow">Betalingsavstemming</p><h1>Bank og betaling</h1><p className="subhead">Koble firmakontoen for automatisk matching av KID og innbetalinger.</p></div></div><section className="panel bank-card"><div className="bank-hero"><div className="empty-icon"><Banknote /></div><div><h2>{active ? "Bankkonto tilkoblet" : "Koble til firmakonto"}</h2><p>{active ? `Konto ${active.account_number_masked ?? ""} er klar for avstemming.` : "OK Works bruker en sikker PSD2-leverandør. BankID gjennomføres hos banken; vi lagrer aldri BankID-passord eller koder."}</p></div><span className={`bank-state ${active ? "connected" : ""}`}>{active ? "Tilkoblet" : data.configured ? "Klar for sandbox" : "Venter på tilgang"}</span></div><div className="bank-details"><div><span>Leverandør</span><b>{data.provider}</b></div><div><span>Miljø</span><b>{data.mode === "production" ? "Produksjon" : "Sandbox"}</b></div><div><span>Automatisk KID-match</span><b>{active ? "Aktiv" : "Aktiveres etter tilkobling"}</b></div></div>{!data.configured && <div className="bank-notice"><AlertTriangle /><div><b>Leverandørtilgang mangler</b><span>Neonomics klient-ID, klienthemmelighet og krypteringsnøkkel må legges inn før BankID-/samtykkeflyten kan startes.</span></div></div>}<div className="bank-actions"><button className="primary" disabled={!data.configured || Boolean(active)}><Banknote />{active ? "Banken er koblet til" : "Koble til bank med BankID"}</button></div></section></>;
 }
 
 function SettingsScreen({ onSaved }: { onSaved: (message: string) => void }) {
