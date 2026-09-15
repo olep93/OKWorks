@@ -2,13 +2,14 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 type Snapshot = Record<string, unknown>;
 type Line = { description: string; quantityThousandths: number; unit: string; unitPriceOre: number; subtotalOre: number; vatBasisPoints: number };
+type Attachment = { title: string; description: string | null; workDate: Date | string; fileName: string | null; mimeType: string | null; fileData: Uint8Array };
 type Invoice = { invoiceNumber: number | null; status: string; issueDate: Date | string | null; dueDate: Date | string | null; subtotalOre: number; vatAmountOre: number; totalOre: number; currency: string; organizationSnapshot: unknown; customerSnapshot: unknown; bankAccountSnapshot: string | null };
 
 const asText = (value: unknown) => typeof value === "string" ? value : "";
 const money = (ore: number) => `${(ore / 100).toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr`;
 const date = (value: Date | string | null) => value ? new Date(value).toLocaleDateString("nb-NO") : "—";
 
-export async function buildInvoicePdf(invoice: Invoice, lines: Line[]) {
+export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachments: Attachment[] = []) {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -67,6 +68,51 @@ export async function buildInvoicePdf(invoice: Invoice, lines: Line[]) {
   const contact = [asText(company.invoiceEmail) || asText(company.email), asText(company.invoicePhone) || asText(company.phone)].filter(Boolean).join("  |  ");
   drawText(contact, margin, 55, 8, false, muted);
   drawText(company.organizationNumber ? `Org.nr. ${asText(company.organizationNumber)}` : "", width - margin - 115, 55, 8, false, muted);
+
+  if (attachments.length) {
+    const appendixPage = () => {
+      page = pdf.addPage([width, height]);
+      drawText("FAKTURAVEDLEGG", margin, height - 65, 18, true);
+      drawText(invoice.invoiceNumber ? `Grunnlag og dokumentasjon til faktura #${invoice.invoiceNumber}` : "Grunnlag og dokumentasjon til fakturautkast", margin, height - 86, 9, false, muted);
+      page.drawLine({ start: { x: margin, y: height - 103 }, end: { x: width - margin, y: height - 103 }, thickness: 2, color: forest });
+      return height - 140;
+    };
+    let appendixY = appendixPage();
+    drawText("ARBEIDSGRUNNLAG", margin, appendixY, 8, true, muted); appendixY -= 25;
+    lines.forEach((item) => {
+      if (appendixY < 105) { appendixY = appendixPage(); drawText("ARBEIDSGRUNNLAG, FORTSETTELSE", margin, appendixY, 8, true, muted); appendixY -= 25; }
+      drawText(item.description.slice(0, 65), margin, appendixY, 9, true);
+      drawText(`${(item.quantityThousandths / 1000).toLocaleString("nb-NO")} ${item.unit}  |  ${money(item.subtotalOre)}`, margin, appendixY - 15, 8, false, muted);
+      appendixY -= 39;
+    });
+    if (appendixY < 135) appendixY = appendixPage();
+    drawText("DOKUMENTASJON", margin, appendixY, 8, true, muted); appendixY -= 25;
+    attachments.forEach((attachment, index) => {
+      if (appendixY < 105) { appendixY = appendixPage(); drawText("DOKUMENTASJON, FORTSETTELSE", margin, appendixY, 8, true, muted); appendixY -= 25; }
+      drawText(`${index + 1}. ${attachment.title}`, margin, appendixY, 10, true);
+      drawText(`${date(attachment.workDate)}  |  ${attachment.fileName || "Vedlegg"}`, margin, appendixY - 15, 8, false, muted);
+      if (attachment.description) drawText(attachment.description.slice(0, 85), margin, appendixY - 29, 8, false, muted);
+      appendixY -= attachment.description ? 52 : 39;
+    });
+
+    for (const attachment of attachments) {
+      if (attachment.mimeType === "application/pdf") {
+        const source = await PDFDocument.load(attachment.fileData);
+        const copied = await pdf.copyPages(source, source.getPageIndices());
+        copied.forEach((copiedPage) => pdf.addPage(copiedPage));
+        continue;
+      }
+      page = pdf.addPage([width, height]);
+      drawText(attachment.title, margin, height - 55, 14, true);
+      drawText(`${date(attachment.workDate)}  |  ${attachment.fileName || "Bilde"}`, margin, height - 73, 8, false, muted);
+      if (attachment.description) drawText(attachment.description.slice(0, 100), margin, height - 89, 8, false, muted);
+      const embedded = attachment.mimeType === "image/png" ? await pdf.embedPng(attachment.fileData) : await pdf.embedJpg(attachment.fileData);
+      const maxWidth = width - margin * 2, maxHeight = height - 165;
+      const scale = Math.min(maxWidth / embedded.width, maxHeight / embedded.height, 1);
+      const imageWidth = embedded.width * scale, imageHeight = embedded.height * scale;
+      page.drawImage(embedded, { x: (width - imageWidth) / 2, y: 42 + (maxHeight - imageHeight) / 2, width: imageWidth, height: imageHeight });
+    }
+  }
 
   const pages = pdf.getPages();
   pages.forEach((pdfPage, index) => pdfPage.drawText(`Side ${index + 1} av ${pages.length}`, { x: width / 2 - 22, y: 30, size: 7, font: regular, color: muted }));

@@ -1,7 +1,9 @@
 import {
-  bigint, boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey,
+  bigint, boolean, customType, index, integer, jsonb, pgEnum, pgTable, primaryKey,
   text, timestamp, uniqueIndex, uuid, varchar,
 } from "drizzle-orm/pg-core";
+
+const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({ dataType: () => "bytea" });
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -194,6 +196,9 @@ export const orderEntries = pgTable("order_entries", {
   unitRateOre: bigint("unit_rate_ore", { mode: "number" }),
   amountOre: bigint("amount_ore", { mode: "number" }).notNull().default(0),
   fileName: varchar("file_name", { length: 300 }),
+  mimeType: varchar("mime_type", { length: 160 }),
+  fileSize: integer("file_size"),
+  fileData: bytea("file_data"),
   metadata: jsonb("metadata"),
   billingStatus: billingStatusEnum("billing_status").notNull().default("UNBILLED"),
   ...timestamps,
