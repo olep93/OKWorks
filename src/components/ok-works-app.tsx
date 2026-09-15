@@ -1,67 +1,336 @@
 "use client";
 
-import { AlertTriangle, Building2, Camera, Car, CheckCircle2, ChevronRight, ClipboardList, Clock3, Download, FileText, Hotel, LayoutDashboard, LockKeyhole, LogOut, Menu, Package, Plus, Receipt, Settings, Sparkles, Users, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Building2,
+  Camera,
+  Car,
+  CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  Clock3,
+  Download,
+  FileText,
+  Hotel,
+  LayoutDashboard,
+  LockKeyhole,
+  LogOut,
+  Menu,
+  Package,
+  Plus,
+  Receipt,
+  Settings,
+  Sparkles,
+  Users,
+  X,
+} from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-type User = { id: string; email: string; name: string; organizationId: string; role: string };
-type Customer = { id: string; name: string; organizationNumber: string | null; email: string | null; phone: string | null; address: string | null; postalCode: string | null; city: string | null };
-type Order = { id: string; orderNumber: number; title: string; status: string; workAddress: string | null; customerId: string; updatedAt: string };
+type User = {
+  id: string;
+  email: string;
+  name: string;
+  organizationId: string;
+  role: string;
+};
+type Customer = {
+  id: string;
+  name: string;
+  organizationNumber: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  postalCode: string | null;
+  city: string | null;
+};
+type Order = {
+  id: string;
+  orderNumber: number;
+  title: string;
+  status: string;
+  workAddress: string | null;
+  customerId: string;
+  updatedAt: string;
+};
 type AppData = { customers: Customer[]; orders: Order[] };
-type ProfileData = { organization: Record<string, string | number | null>; settings: Record<string, number>; products: Array<{ id: string; name: string; unit: string; defaultPriceOre: number; vatBasisPoints: number; category: string | null }> };
+type ProfileData = {
+  organization: Record<string, string | number | null>;
+  settings: Record<string, number>;
+  products: Array<{
+    id: string;
+    name: string;
+    unit: string;
+    defaultPriceOre: number;
+    vatBasisPoints: number;
+    category: string | null;
+  }>;
+};
 type Modal = "customer" | "order" | null;
-type Screen = "dashboard" | "orders" | "customers" | "order" | "invoices" | "invoice" | "settings";
-type EntryKind = "LINE" | "DRIVING" | "EXPENSE" | "HOTEL" | "IMAGE" | "DOCUMENT";
-type ExtraEntry = { id: string; kind: EntryKind; workDate: string; title: string; description: string | null; quantityThousandths: number | null; unit: string | null; unitRateOre: number | null; amountOre: number; fileName: string | null; mimeType?: string | null; fileSize?: number | null };
+type Screen =
+  | "dashboard"
+  | "orders"
+  | "customers"
+  | "order"
+  | "invoices"
+  | "invoice"
+  | "settings";
+type EntryKind =
+  | "LINE"
+  | "DRIVING"
+  | "EXPENSE"
+  | "HOTEL"
+  | "IMAGE"
+  | "DOCUMENT";
+type ExtraEntry = {
+  id: string;
+  kind: EntryKind;
+  workDate: string;
+  title: string;
+  description: string | null;
+  quantityThousandths: number | null;
+  unit: string | null;
+  unitRateOre: number | null;
+  amountOre: number;
+  fileName: string | null;
+  mimeType?: string | null;
+  fileSize?: number | null;
+};
 
 async function compressImage(file: File) {
   if (!file.type.startsWith("image/") || file.size < 700_000) return file;
-  const bitmap = await createImageBitmap(file); const maxSide = 1800; const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas"); canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close();
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", .78));
-  return blob ? new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg", lastModified: Date.now() }) : file;
+  const bitmap = await createImageBitmap(file);
+  const maxSide = 1800;
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", 0.78),
+  );
+  return blob
+    ? new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", {
+        type: "image/jpeg",
+        lastModified: Date.now(),
+      })
+    : file;
 }
 
 export function OkWorksApp() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
-  useEffect(() => { fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((d) => setUser(d.user ?? null)).catch(() => setUser(null)); }, []);
-  if (user === undefined) return <div className="loading-screen"><div className="brand-mark">OK</div><p>Laster OK Works…</p></div>;
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setUser(d.user ?? null))
+      .catch(() => setUser(null));
+  }, []);
+  if (user === undefined)
+    return (
+      <div className="loading-screen">
+        <div className="brand-mark">OK</div>
+        <p>Laster OK Works…</p>
+      </div>
+    );
   if (!user) return <Login onAuthenticated={setUser} />;
   return <Portal user={user} onLogout={() => setUser(null)} />;
 }
 
 function Login({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
-  const [step, setStep] = useState<"email" | "password" | "setup">("email");
-  const [email, setEmail] = useState("olep93@gmail.com");
+  const [step, setStep] = useState<"email" | "password" | "setup" | "register">(
+    "email",
+  );
+  const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError("");
+    event.preventDefault();
+    setBusy(true);
+    setError("");
     const form = new FormData(event.currentTarget);
-    const endpoint = step === "email" ? "/api/auth/status" : step === "setup" ? "/api/auth/setup" : "/api/auth/login";
-    const body = step === "email" ? { email } : step === "setup" ? { email, setupCode: form.get("setupCode"), password: form.get("password") } : { email, password: form.get("password") };
+    const endpoint =
+      step === "email"
+        ? "/api/auth/status"
+        : step === "setup"
+          ? "/api/auth/setup"
+          : step === "register"
+            ? "/api/auth/register"
+            : "/api/auth/login";
+    const body =
+      step === "email"
+        ? { email }
+        : step === "setup"
+          ? {
+              email,
+              setupCode: form.get("setupCode"),
+              password: form.get("password"),
+            }
+          : step === "register"
+            ? {
+                name: form.get("name"),
+                email,
+                companyName: form.get("companyName"),
+                organizationNumber: form.get("organizationNumber"),
+                password: form.get("password"),
+                acceptedTerms: form.get("acceptedTerms") === "on",
+              }
+            : { email, password: form.get("password") };
     try {
-      const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Noe gikk galt.");
-      if (step === "email") { setStep(data.needsSetup ? "setup" : "password"); return; }
-      const me = await fetch("/api/auth/me", { cache: "no-store" }).then((value) => value.json());
+      if (step === "email") {
+        setStep(data.needsSetup ? "setup" : "password");
+        return;
+      }
+      const me = await fetch("/api/auth/me", { cache: "no-store" }).then(
+        (value) => value.json(),
+      );
       onAuthenticated(me.user);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Noe gikk galt."); }
-    finally { setBusy(false); }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Noe gikk galt.");
+    } finally {
+      setBusy(false);
+    }
   }
-  return <main className="auth-page"><section className="auth-card">
-    <div className="auth-brand"><div className="brand-mark">OK</div><div><h1>OK Works</h1><p>Fra utført jobb til fakturert</p></div></div>
-    <div className="auth-copy"><p className="eyebrow">{step === "setup" ? "Første innlogging" : "Velkommen tilbake"}</p><h2>{step === "setup" ? "Opprett passordet ditt" : "Logg inn"}</h2><p>{step === "setup" ? "Bruk oppstartskoden du har fått, og velg et personlig passord." : "Fortsett med e-postadressen din."}</p></div>
-    <form className="auth-form" onSubmit={submit}>
-      <label><span>E-post</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} disabled={step !== "email"} required /></label>
-      {step === "setup" && <label><span>Oppstartskode</span><input name="setupCode" autoComplete="one-time-code" required /></label>}
-      {step !== "email" && <label><span>{step === "setup" ? "Velg passord" : "Passord"}</span><input name="password" type="password" autoComplete={step === "setup" ? "new-password" : "current-password"} minLength={step === "setup" ? 10 : 1} required /></label>}
-      {error && <p className="form-error">{error}</p>}
-      <button className="primary full" disabled={busy}>{busy ? "Et øyeblikk…" : step === "setup" ? "Opprett passord og logg inn" : "Fortsett"}</button>
-      {step !== "email" && <button type="button" className="text-button" onClick={() => setStep("email")}>Bruk en annen e-post</button>}
-    </form>
-  </section></main>;
+  return (
+    <main className="auth-page">
+      <section className="auth-card">
+        <div className="auth-brand">
+          <div className="brand-mark">OK</div>
+          <div>
+            <h1>OK Works</h1>
+            <p>Fra utført jobb til fakturert</p>
+          </div>
+        </div>
+        <div className="auth-copy">
+          <p className="eyebrow">
+            {step === "register"
+              ? "Nytt firma"
+              : step === "setup"
+                ? "Første innlogging"
+                : "Velkommen tilbake"}
+          </p>
+          <h2>
+            {step === "register"
+              ? "Opprett arbeidsområdet"
+              : step === "setup"
+                ? "Opprett passordet ditt"
+                : "Logg inn"}
+          </h2>
+          <p>
+            {step === "register"
+              ? "Du blir eier av et separat firmaområde."
+              : step === "setup"
+                ? "Bruk oppstartskoden du har fått, og velg et personlig passord."
+                : "Fortsett med e-postadressen din."}
+          </p>
+        </div>
+        <form className="auth-form" onSubmit={submit}>
+          {step === "register" && (
+            <>
+              <label>
+                <span>Navnet ditt</span>
+                <input name="name" autoComplete="name" required />
+              </label>
+              <label>
+                <span>Firmanavn</span>
+                <input
+                  name="companyName"
+                  autoComplete="organization"
+                  required
+                />
+              </label>
+              <label>
+                <span>Organisasjonsnummer (valgfritt)</span>
+                <input name="organizationNumber" inputMode="numeric" />
+              </label>
+            </>
+          )}
+          <label>
+            <span>E-post</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              disabled={step !== "email" && step !== "register"}
+              required
+            />
+          </label>
+          {step === "setup" && (
+            <label>
+              <span>Oppstartskode</span>
+              <input name="setupCode" autoComplete="one-time-code" required />
+            </label>
+          )}
+          {step !== "email" && (
+            <label>
+              <span>
+                {step === "setup" || step === "register"
+                  ? "Velg passord"
+                  : "Passord"}
+              </span>
+              <input
+                name="password"
+                type="password"
+                autoComplete={
+                  step === "setup" || step === "register"
+                    ? "new-password"
+                    : "current-password"
+                }
+                minLength={step === "setup" || step === "register" ? 10 : 1}
+                required
+              />
+            </label>
+          )}
+          {step === "register" && (
+            <label className="terms-row">
+              <input name="acceptedTerms" type="checkbox" required />
+              <span>
+                Jeg bekrefter at opplysningene er riktige og godtar at
+                firmaområdet opprettes.
+              </span>
+            </label>
+          )}
+          {error && <p className="form-error">{error}</p>}
+          <button className="primary full" disabled={busy}>
+            {busy
+              ? "Et øyeblikk…"
+              : step === "register"
+                ? "Opprett firma og logg inn"
+                : step === "setup"
+                  ? "Opprett passord og logg inn"
+                  : "Fortsett"}
+          </button>
+          {step !== "email" && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setStep("email")}
+            >
+              Bruk en annen e-post
+            </button>
+          )}
+          {step === "email" && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                setError("");
+                setStep("register");
+              }}
+            >
+              Nytt firma? Opprett konto
+            </button>
+          )}
+        </form>
+      </section>
+    </main>
+  );
 }
 
 function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
@@ -69,102 +338,1838 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [loading, setLoading] = useState(true);
   const [screen, setScreen] = useState<Screen>("dashboard");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(
+    null,
+  );
   const [modal, setModal] = useState<Modal>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [toast, setToast] = useState("");
-  async function refresh() { const response = await fetch("/api/app", { cache: "no-store" }); if (response.status === 401) { onLogout(); return; } setData(await response.json()); setLoading(false); }
-  useEffect(() => { fetch("/api/app", { cache: "no-store" }).then(async (response) => { if (response.status === 401) { onLogout(); return; } setData(await response.json()); setLoading(false); }); }, [onLogout]);
-  useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(""), 2500); return () => clearTimeout(timer); }, [toast]);
-  const customerMap = useMemo(() => new Map(data.customers.map((customer) => [customer.id, customer])), [data.customers]);
-  const selectedOrder = data.orders.find((order) => order.id === selectedOrderId) ?? null;
-  const openOrder = (id: string) => { setSelectedOrderId(id); setScreen("order"); setMenuOpen(false); };
-  const openInvoice = (id: string) => { setSelectedInvoiceId(id); setScreen("invoice"); setMenuOpen(false); };
-  const navigate = (next: Screen) => { setScreen(next); setMenuOpen(false); };
-  async function logout() { await fetch("/api/auth/logout", { method: "POST" }); onLogout(); }
-  return <div className="app-shell">
-    <aside className={`sidebar ${menuOpen ? "open" : ""}`}><div className="brand"><div className="brand-mark">OK</div><div><div className="brand-name">OK Works</div><small>Din arbeidsportal</small></div></div>
-      <nav className="nav" aria-label="Hovedmeny"><button className={`nav-button ${screen === "dashboard" ? "active" : ""}`} onClick={() => navigate("dashboard")}><LayoutDashboard />Dashboard</button><button className={`nav-button ${screen === "orders" || screen === "order" ? "active" : ""}`} onClick={() => navigate("orders")}><ClipboardList />Ordre</button><button className={`nav-button ${screen === "customers" ? "active" : ""}`} onClick={() => navigate("customers")}><Users />Kunder</button><button className={`nav-button ${screen === "invoices" || screen === "invoice" ? "active" : ""}`} onClick={() => navigate("invoices")}><FileText />Fakturaer</button><button className="nav-button" disabled><Package />Produkter & tjenester</button><button className={`nav-button ${screen === "settings" ? "active" : ""}`} onClick={() => navigate("settings")}><Settings />Innstillinger</button></nav>
-      <div className="sidebar-bottom"><div className="user-card"><div className="avatar">OK</div><div><b>{user.name}</b><span>Eier</span></div><button className="icon-button" aria-label="Logg ut" onClick={logout}><LogOut /></button></div></div></aside>
-    <main className="main"><header className="topbar"><button className="icon-button mobile-menu" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button><div className="crumb">OK Works&nbsp;&nbsp;/&nbsp;&nbsp;<strong>{screen === "dashboard" ? "Dashboard" : screen === "customers" ? "Kunder" : screen === "settings" ? "Firmaprofil" : screen === "orders" ? "Ordre" : screen === "invoices" || screen === "invoice" ? "Fakturaer" : selectedOrder ? `Ordre #${selectedOrder.orderNumber}` : "Ordre"}</strong></div></header>
-      <div className="content">{loading ? <div className="empty-state"><p>Laster arbeidsområdet…</p></div> : screen === "settings" ? <SettingsScreen onSaved={setToast} /> : screen === "invoices" ? <InvoicesScreen onOpen={openInvoice} /> : screen === "invoice" && selectedInvoiceId ? <InvoiceScreen invoiceId={selectedInvoiceId} onBack={() => navigate("invoices")} /> : screen === "customers" ? <Customers customers={data.customers} onNew={() => setModal("customer")} /> : screen === "orders" ? <Orders data={data} customerMap={customerMap} onNew={() => setModal("order")} onOpen={openOrder} /> : screen === "order" && selectedOrder ? <OrderDetails order={selectedOrder} customer={customerMap.get(selectedOrder.customerId)} onBack={() => navigate("orders")} onInvoice={openInvoice} /> : <Dashboard data={data} customerMap={customerMap} onNewCustomer={() => setModal("customer")} onNewOrder={() => setModal("order")} onOpenOrder={openOrder} />}</div></main>
-    {modal && <CreateModal kind={modal} customers={data.customers} onClose={() => setModal(null)} onCreated={async (message) => { setModal(null); await refresh(); setToast(message); }} />}{toast && <div className="save-toast" role="status">{toast}</div>}
-  </div>;
+  async function refresh() {
+    const response = await fetch("/api/app", { cache: "no-store" });
+    if (response.status === 401) {
+      onLogout();
+      return;
+    }
+    setData(await response.json());
+    setLoading(false);
+  }
+  useEffect(() => {
+    fetch("/api/app", { cache: "no-store" }).then(async (response) => {
+      if (response.status === 401) {
+        onLogout();
+        return;
+      }
+      setData(await response.json());
+      setLoading(false);
+    });
+  }, [onLogout]);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(""), 2500);
+    return () => clearTimeout(timer);
+  }, [toast]);
+  const customerMap = useMemo(
+    () => new Map(data.customers.map((customer) => [customer.id, customer])),
+    [data.customers],
+  );
+  const selectedOrder =
+    data.orders.find((order) => order.id === selectedOrderId) ?? null;
+  const openOrder = (id: string) => {
+    setSelectedOrderId(id);
+    setScreen("order");
+    setMenuOpen(false);
+  };
+  const openInvoice = (id: string) => {
+    setSelectedInvoiceId(id);
+    setScreen("invoice");
+    setMenuOpen(false);
+  };
+  const navigate = (next: Screen) => {
+    setScreen(next);
+    setMenuOpen(false);
+  };
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    onLogout();
+  }
+  return (
+    <div className="app-shell">
+      <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
+        <div className="brand">
+          <div className="brand-mark">OK</div>
+          <div>
+            <div className="brand-name">OK Works</div>
+            <small>Din arbeidsportal</small>
+          </div>
+        </div>
+        <nav className="nav" aria-label="Hovedmeny">
+          <button
+            className={`nav-button ${screen === "dashboard" ? "active" : ""}`}
+            onClick={() => navigate("dashboard")}
+          >
+            <LayoutDashboard />
+            Dashboard
+          </button>
+          <button
+            className={`nav-button ${screen === "orders" || screen === "order" ? "active" : ""}`}
+            onClick={() => navigate("orders")}
+          >
+            <ClipboardList />
+            Ordre
+          </button>
+          <button
+            className={`nav-button ${screen === "customers" ? "active" : ""}`}
+            onClick={() => navigate("customers")}
+          >
+            <Users />
+            Kunder
+          </button>
+          <button
+            className={`nav-button ${screen === "invoices" || screen === "invoice" ? "active" : ""}`}
+            onClick={() => navigate("invoices")}
+          >
+            <FileText />
+            Fakturaer
+          </button>
+          <button className="nav-button" disabled>
+            <Package />
+            Produkter & tjenester
+          </button>
+          <button
+            className={`nav-button ${screen === "settings" ? "active" : ""}`}
+            onClick={() => navigate("settings")}
+          >
+            <Settings />
+            Innstillinger
+          </button>
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="user-card">
+            <div className="avatar">OK</div>
+            <div>
+              <b>{user.name}</b>
+              <span>Eier</span>
+            </div>
+            <button
+              className="icon-button"
+              aria-label="Logg ut"
+              onClick={logout}
+            >
+              <LogOut />
+            </button>
+          </div>
+        </div>
+      </aside>
+      <main className="main">
+        <header className="topbar">
+          <button
+            className="icon-button mobile-menu"
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            {menuOpen ? <X /> : <Menu />}
+          </button>
+          <div className="crumb">
+            OK Works&nbsp;&nbsp;/&nbsp;&nbsp;
+            <strong>
+              {screen === "dashboard"
+                ? "Dashboard"
+                : screen === "customers"
+                  ? "Kunder"
+                  : screen === "settings"
+                    ? "Firmaprofil"
+                    : screen === "orders"
+                      ? "Ordre"
+                      : screen === "invoices" || screen === "invoice"
+                        ? "Fakturaer"
+                        : selectedOrder
+                          ? `Ordre #${selectedOrder.orderNumber}`
+                          : "Ordre"}
+            </strong>
+          </div>
+        </header>
+        <div className="content">
+          {loading ? (
+            <div className="empty-state">
+              <p>Laster arbeidsområdet…</p>
+            </div>
+          ) : screen === "settings" ? (
+            <SettingsScreen onSaved={setToast} />
+          ) : screen === "invoices" ? (
+            <InvoicesScreen onOpen={openInvoice} />
+          ) : screen === "invoice" && selectedInvoiceId ? (
+            <InvoiceScreen
+              invoiceId={selectedInvoiceId}
+              onBack={() => navigate("invoices")}
+            />
+          ) : screen === "customers" ? (
+            <Customers
+              customers={data.customers}
+              onNew={() => setModal("customer")}
+            />
+          ) : screen === "orders" ? (
+            <Orders
+              data={data}
+              customerMap={customerMap}
+              onNew={() => setModal("order")}
+              onOpen={openOrder}
+            />
+          ) : screen === "order" && selectedOrder ? (
+            <OrderDetails
+              order={selectedOrder}
+              customer={customerMap.get(selectedOrder.customerId)}
+              onBack={() => navigate("orders")}
+              onInvoice={openInvoice}
+            />
+          ) : (
+            <Dashboard
+              user={user}
+              data={data}
+              customerMap={customerMap}
+              onNewCustomer={() => setModal("customer")}
+              onNewOrder={() => setModal("order")}
+              onOpenOrder={openOrder}
+            />
+          )}
+        </div>
+      </main>
+      {modal && (
+        <CreateModal
+          kind={modal}
+          customers={data.customers}
+          onClose={() => setModal(null)}
+          onCreated={async (message) => {
+            setModal(null);
+            await refresh();
+            setToast(message);
+          }}
+        />
+      )}
+      {toast && (
+        <div className="save-toast" role="status">
+          {toast}
+        </div>
+      )}
+    </div>
+  );
 }
 
-function Dashboard({ data, customerMap, onNewCustomer, onNewOrder, onOpenOrder }: { data: AppData; customerMap: Map<string, Customer>; onNewCustomer: () => void; onNewOrder: () => void; onOpenOrder: (id: string) => void }) {
-  return <><div className="page-heading"><div><p className="eyebrow">Arbeidsoversikt</p><h1>God dag, Ole.</h1><p className="subhead">Her bygger du opp kundene og ordrene dine.</p></div><div className="heading-actions"><button className="secondary" onClick={onNewCustomer}><Users />Ny kunde</button><button className="primary" onClick={onNewOrder} disabled={!data.customers.length}><Plus />Ny ordre</button></div></div>
-    {!data.orders.length ? <section className="panel empty-state"><div className="empty-icon"><ClipboardList /></div><h2>Ingen ordre ennå</h2><p>{data.customers.length ? "Opprett din første ordre og begynn å registrere arbeidet." : "Start med å opprette en kunde. Deretter kan du lage den første ordren."}</p><button className="primary" onClick={data.customers.length ? onNewOrder : onNewCustomer}>{data.customers.length ? <Plus /> : <Users />}{data.customers.length ? "Opprett første ordre" : "Opprett første kunde"}</button></section> : <section className="panel"><div className="panel-head"><div><h2>Aktive ordre</h2><p>{data.orders.length} {data.orders.length === 1 ? "ordre" : "ordrer"}</p></div></div><div className="order-list">{data.orders.map((order) => <button className="order-row" key={order.id} onClick={() => onOpenOrder(order.id)}><div className="order-title"><span>ORDRE #{order.orderNumber}</span>{order.title}</div><div className="order-cell"><strong>{customerMap.get(order.customerId)?.name ?? "Ukjent kunde"}</strong>{order.workAddress || "Ingen arbeidsadresse"}</div><div><span className="status open">Åpen</span></div><ChevronRight /></button>)}</div></section>}
-  </>;
+function Dashboard({
+  user,
+  data,
+  customerMap,
+  onNewCustomer,
+  onNewOrder,
+  onOpenOrder,
+}: {
+  user: User;
+  data: AppData;
+  customerMap: Map<string, Customer>;
+  onNewCustomer: () => void;
+  onNewOrder: () => void;
+  onOpenOrder: (id: string) => void;
+}) {
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Arbeidsoversikt</p>
+          <h1>God dag, {user.name.split(" ")[0]}.</h1>
+          <p className="subhead">Her bygger du opp kundene og ordrene dine.</p>
+        </div>
+        <div className="heading-actions">
+          <button className="secondary" onClick={onNewCustomer}>
+            <Users />
+            Ny kunde
+          </button>
+          <button
+            className="primary"
+            onClick={onNewOrder}
+            disabled={!data.customers.length}
+          >
+            <Plus />
+            Ny ordre
+          </button>
+        </div>
+      </div>
+      {!data.orders.length ? (
+        <section className="panel empty-state">
+          <div className="empty-icon">
+            <ClipboardList />
+          </div>
+          <h2>Ingen ordre ennå</h2>
+          <p>
+            {data.customers.length
+              ? "Opprett din første ordre og begynn å registrere arbeidet."
+              : "Start med å opprette en kunde. Deretter kan du lage den første ordren."}
+          </p>
+          <button
+            className="primary"
+            onClick={data.customers.length ? onNewOrder : onNewCustomer}
+          >
+            {data.customers.length ? <Plus /> : <Users />}
+            {data.customers.length
+              ? "Opprett første ordre"
+              : "Opprett første kunde"}
+          </button>
+        </section>
+      ) : (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>Aktive ordre</h2>
+              <p>
+                {data.orders.length}{" "}
+                {data.orders.length === 1 ? "ordre" : "ordrer"}
+              </p>
+            </div>
+          </div>
+          <div className="order-list">
+            {data.orders.map((order) => (
+              <button
+                className="order-row"
+                key={order.id}
+                onClick={() => onOpenOrder(order.id)}
+              >
+                <div className="order-title">
+                  <span>ORDRE #{order.orderNumber}</span>
+                  {order.title}
+                </div>
+                <div className="order-cell">
+                  <strong>
+                    {customerMap.get(order.customerId)?.name ?? "Ukjent kunde"}
+                  </strong>
+                  {order.workAddress || "Ingen arbeidsadresse"}
+                </div>
+                <div>
+                  <span className="status open">Åpen</span>
+                </div>
+                <ChevronRight />
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+    </>
+  );
 }
 
-function Customers({ customers, onNew }: { customers: Customer[]; onNew: () => void }) { return <><div className="page-heading"><div><p className="eyebrow">Kunderegister</p><h1>Kunder</h1><p className="subhead">Kundedata lagres trygt i databasen.</p></div><button className="primary" onClick={onNew}><Plus />Ny kunde</button></div>{customers.length ? <section className="panel customer-list">{customers.map((customer) => <article key={customer.id}><div className="customer-icon"><Building2 /></div><div><h3>{customer.name}</h3><p>{customer.organizationNumber ? `Org.nr. ${customer.organizationNumber}` : "Privatkunde"}</p><span>{customer.email || customer.phone || customer.address || "Ingen kontaktinformasjon"}</span></div></article>)}</section> : <section className="panel empty-state"><h2>Ingen kunder ennå</h2><p>Opprett din første kunde for å komme i gang.</p><button className="primary" onClick={onNew}><Plus />Ny kunde</button></section>}</>; }
-
-function Orders({ data, customerMap, onNew, onOpen }: { data: AppData; customerMap: Map<string, Customer>; onNew: () => void; onOpen: (id: string) => void }) {
-  return <><div className="page-heading"><div><p className="eyebrow">Arbeidsordre</p><h1>Ordre</h1><p className="subhead">Alle jobbene dine samlet på ett sted.</p></div><button className="primary" onClick={onNew} disabled={!data.customers.length}><Plus />Ny ordre</button></div>{data.orders.length ? <section className="panel"><div className="panel-head"><div><h2>Alle ordre</h2><p>{data.orders.length} {data.orders.length === 1 ? "ordre" : "ordrer"}</p></div></div><div className="order-list">{data.orders.map((order) => <button className="order-row" key={order.id} onClick={() => onOpen(order.id)}><div className="order-title"><span>ORDRE #{order.orderNumber}</span>{order.title}</div><div className="order-cell"><strong>{customerMap.get(order.customerId)?.name ?? "Ukjent kunde"}</strong>{order.workAddress || "Ingen arbeidsadresse"}</div><div><span className="status open">Åpen</span></div><ChevronRight /></button>)}</div></section> : <section className="panel empty-state"><div className="empty-icon"><ClipboardList /></div><h2>Ingen ordre ennå</h2><p>{data.customers.length ? "Opprett den første ordren for en av kundene dine." : "Opprett en kunde først. Deretter kan du lage en ordre."}</p><button className="primary" onClick={onNew} disabled={!data.customers.length}><Plus />Ny ordre</button></section>}</>;
+function Customers({
+  customers,
+  onNew,
+}: {
+  customers: Customer[];
+  onNew: () => void;
+}) {
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Kunderegister</p>
+          <h1>Kunder</h1>
+          <p className="subhead">Kundedata lagres trygt i databasen.</p>
+        </div>
+        <button className="primary" onClick={onNew}>
+          <Plus />
+          Ny kunde
+        </button>
+      </div>
+      {customers.length ? (
+        <section className="panel customer-list">
+          {customers.map((customer) => (
+            <article key={customer.id}>
+              <div className="customer-icon">
+                <Building2 />
+              </div>
+              <div>
+                <h3>{customer.name}</h3>
+                <p>
+                  {customer.organizationNumber
+                    ? `Org.nr. ${customer.organizationNumber}`
+                    : "Privatkunde"}
+                </p>
+                <span>
+                  {customer.email ||
+                    customer.phone ||
+                    customer.address ||
+                    "Ingen kontaktinformasjon"}
+                </span>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : (
+        <section className="panel empty-state">
+          <h2>Ingen kunder ennå</h2>
+          <p>Opprett din første kunde for å komme i gang.</p>
+          <button className="primary" onClick={onNew}>
+            <Plus />
+            Ny kunde
+          </button>
+        </section>
+      )}
+    </>
+  );
 }
 
-function OrderDetails({ order, customer, onBack, onInvoice }: { order: Order; customer?: Customer; onBack: () => void; onInvoice: (id: string) => void }) {
-  const [timeEntries, setTimeEntries] = useState<Array<{ id: string; workDate: string; minutes: number; ratePerHourOre: number; description: string | null }>>([]); const [extraEntries, setExtraEntries] = useState<ExtraEntry[]>([]); const [showTime, setShowTime] = useState(false); const [entryKind, setEntryKind] = useState<EntryKind | null>(null);
-  async function loadEntries() { const [timeResponse, extraResponse] = await Promise.all([fetch(`/api/orders/${order.id}/time`, { cache: "no-store" }), fetch(`/api/orders/${order.id}/entries`, { cache: "no-store" })]); const [timeData, extraData] = await Promise.all([timeResponse.json(), extraResponse.json()]); setTimeEntries(timeData.entries ?? []); setExtraEntries(extraData.entries ?? []); }
-  useEffect(() => { Promise.all([fetch(`/api/orders/${order.id}/time`, { cache: "no-store" }).then((r) => r.json()), fetch(`/api/orders/${order.id}/entries`, { cache: "no-store" }).then((r) => r.json())]).then(([timeData, extraData]) => { setTimeEntries(timeData.entries ?? []); setExtraEntries(extraData.entries ?? []); }); }, [order.id]);
-  const totalOre = timeEntries.reduce((sum, entry) => sum + Math.round(entry.minutes / 60 * entry.ratePerHourOre), 0) + extraEntries.reduce((sum, entry) => sum + entry.amountOre, 0);
-  async function createInvoice() { const response = await fetch(`/api/orders/${order.id}/invoice`, { method: "POST" }); const data = await response.json(); if (!response.ok) { window.alert(data.error); return; } onInvoice(data.invoice.id); }
-  return <div className="order-view"><section className="order-hero"><button className="back-button" onClick={onBack}>← Tilbake til ordrelisten</button><div className="order-hero-main"><div><p className="eyebrow">Ordre #{order.orderNumber} · Åpen</p><h1>{order.title}</h1><div className="order-meta"><span><Building2 />{customer?.name ?? "Ukjent kunde"}</span><span>{order.workAddress || "Ingen arbeidsadresse"}</span></div></div><div className="order-amount"><span>Registrert fakturerbart</span><strong>{(totalOre / 100).toLocaleString("nb-NO")} kr</strong><button className="primary invoice-button" onClick={createInvoice} disabled={!totalOre}><Sparkles />Lag fakturautkast</button></div></div></section>
-    <div className="quick-actions"><button className="quick-action" onClick={() => setShowTime(true)}><Clock3 />+ TIMER</button><button className="quick-action" onClick={() => setEntryKind("LINE")}><Package />+ LINJE</button><button className="quick-action" onClick={() => setEntryKind("DRIVING")}><Car />+ KJØRING</button><button className="quick-action" onClick={() => setEntryKind("EXPENSE")}><Receipt />+ UTLEGG</button><button className="quick-action" onClick={() => setEntryKind("HOTEL")}><Hotel />+ HOTELL</button><button className="quick-action" onClick={() => setEntryKind("IMAGE")}><Camera />+ BILDE</button><button className="quick-action" onClick={() => setEntryKind("DOCUMENT")}><FileText />+ DOKUMENT</button></div>
-    {timeEntries.length || extraEntries.length ? <section className="panel time-list"><div className="panel-head"><div><h2>Jobbaktivitet</h2><p>Alt som er registrert på ordren</p></div></div>{timeEntries.map((entry) => <div className="time-row activity-row" key={entry.id}><div><b><Clock3 />{(entry.minutes / 60).toLocaleString("nb-NO")} timer</b><span>{new Date(entry.workDate).toLocaleDateString("nb-NO")} · {entry.description || "Arbeid på ordre"}</span></div><strong>{(entry.minutes / 60 * entry.ratePerHourOre / 100).toLocaleString("nb-NO")} kr</strong></div>)}{extraEntries.map((entry) => <div className="time-row activity-row" key={entry.id}><div><b>{entry.title}</b><span>{new Date(entry.workDate).toLocaleDateString("nb-NO")} · {entry.description || entry.fileName || "Registrert"}</span></div><strong>{entry.amountOre ? `${(entry.amountOre / 100).toLocaleString("nb-NO")} kr` : "Dokumentert"}</strong></div>)}</section> : <section className="panel empty-state"><div className="empty-icon"><ClipboardList /></div><h2>Ingen registreringer ennå</h2><p>Bruk knappene over for timer, varer, kjøring, utlegg, hotell eller dokumentasjon.</p></section>}
-    {showTime && <TimeModal orderId={order.id} onClose={() => setShowTime(false)} onSaved={async () => { setShowTime(false); await loadEntries(); }} />}{entryKind && <OrderEntryModal orderId={order.id} kind={entryKind} onClose={() => setEntryKind(null)} onSaved={async () => { setEntryKind(null); await loadEntries(); }} />}</div>;
+function Orders({
+  data,
+  customerMap,
+  onNew,
+  onOpen,
+}: {
+  data: AppData;
+  customerMap: Map<string, Customer>;
+  onNew: () => void;
+  onOpen: (id: string) => void;
+}) {
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Arbeidsordre</p>
+          <h1>Ordre</h1>
+          <p className="subhead">Alle jobbene dine samlet på ett sted.</p>
+        </div>
+        <button
+          className="primary"
+          onClick={onNew}
+          disabled={!data.customers.length}
+        >
+          <Plus />
+          Ny ordre
+        </button>
+      </div>
+      {data.orders.length ? (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>Alle ordre</h2>
+              <p>
+                {data.orders.length}{" "}
+                {data.orders.length === 1 ? "ordre" : "ordrer"}
+              </p>
+            </div>
+          </div>
+          <div className="order-list">
+            {data.orders.map((order) => (
+              <button
+                className="order-row"
+                key={order.id}
+                onClick={() => onOpen(order.id)}
+              >
+                <div className="order-title">
+                  <span>ORDRE #{order.orderNumber}</span>
+                  {order.title}
+                </div>
+                <div className="order-cell">
+                  <strong>
+                    {customerMap.get(order.customerId)?.name ?? "Ukjent kunde"}
+                  </strong>
+                  {order.workAddress || "Ingen arbeidsadresse"}
+                </div>
+                <div>
+                  <span className="status open">Åpen</span>
+                </div>
+                <ChevronRight />
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <section className="panel empty-state">
+          <div className="empty-icon">
+            <ClipboardList />
+          </div>
+          <h2>Ingen ordre ennå</h2>
+          <p>
+            {data.customers.length
+              ? "Opprett den første ordren for en av kundene dine."
+              : "Opprett en kunde først. Deretter kan du lage en ordre."}
+          </p>
+          <button
+            className="primary"
+            onClick={onNew}
+            disabled={!data.customers.length}
+          >
+            <Plus />
+            Ny ordre
+          </button>
+        </section>
+      )}
+    </>
+  );
 }
 
-const entryLabels: Record<EntryKind, string> = { LINE: "vare eller tjeneste", DRIVING: "kjøring", EXPENSE: "utlegg", HOTEL: "hotell", IMAGE: "bilde", DOCUMENT: "dokument" };
-function OrderEntryModal({ orderId, kind, onClose, onSaved }: { orderId: string; kind: EntryKind; onClose: () => void; onSaved: () => void }) {
-  const [error, setError] = useState(""); const today = new Date().toISOString().slice(0, 10); const financial = !["IMAGE", "DOCUMENT"].includes(kind);
-  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); form.set("kind", kind); let body: BodyInit; const headers: HeadersInit = {}; if (financial) { const raw: Record<string, unknown> = Object.fromEntries(form.entries()); for (const key of ["unitRateOre", "costOre"]) if (raw[key]) raw[key] = Math.round(Number(raw[key]) * 100); if (raw.markupBasisPoints) raw.markupBasisPoints = Math.round(Number(raw.markupBasisPoints) * 100); body = JSON.stringify(raw); headers["content-type"] = "application/json"; } else { const file = form.get("file"); if (kind === "IMAGE" && file instanceof File) form.set("file", await compressImage(file)); body = form; } const response = await fetch(`/api/orders/${orderId}/entries`, { method: "POST", headers, body }); const data = await response.json(); if (!response.ok) { setError(data.error); return; } onSaved(); }
-  return <div className="modal-backdrop"><section className="entry-modal" role="dialog" aria-modal="true"><div className="modal-head"><div className="modal-title-icon">{kind === "DRIVING" ? <Car /> : kind === "EXPENSE" ? <Receipt /> : kind === "HOTEL" ? <Hotel /> : kind === "IMAGE" ? <Camera /> : kind === "DOCUMENT" ? <FileText /> : <Package />}</div><div><h2>Legg til {entryLabels[kind]}</h2><p>Registreringen lagres permanent på ordren.</p></div><button className="icon-button" onClick={onClose}><X /></button></div><form onSubmit={submit}><div className="form-grid"><Field label="Dato"><input name="workDate" type="date" defaultValue={today} required /></Field><Field label={kind === "DRIVING" ? "Strekning" : kind === "HOTEL" ? "Hotell" : kind === "IMAGE" ? "Bildetittel" : kind === "DOCUMENT" ? "Dokumenttittel" : "Navn"}><input name="title" required /></Field>{kind === "LINE" && <><Field label="Antall"><input name="quantity" type="number" step="0.001" defaultValue="1" required /></Field><Field label="Enhet"><input name="unit" defaultValue="stk" required /></Field><Field label="Pris per enhet (kr)"><input name="unitRateOre" type="number" step="0.01" required /></Field></>}{kind === "DRIVING" && <><Field label="Kilometer"><input name="quantity" type="number" step="0.1" required /></Field><Field label="Kr per km"><input name="unitRateOre" type="number" step="0.01" required /></Field><input type="hidden" name="unit" value="km" /></>}{(kind === "EXPENSE" || kind === "HOTEL") && <><Field label="Kostnad (kr)"><input name="costOre" type="number" step="0.01" required /></Field><Field label="Påslag (%)"><input name="markupBasisPoints" type="number" step="0.01" defaultValue="0" /></Field></>}{!financial && <Field label="Velg fil" wide><input name="file" type="file" accept={kind === "IMAGE" ? "image/jpeg,image/png" : "application/pdf,image/jpeg,image/png"} required /></Field>}<Field label="Beskrivelse" wide><input name="description" /></Field></div>{!financial && <p className="upload-note">JPG, PNG eller PDF, maks 4 MB. Filen følger automatisk med fakturavedlegget.</p>}{error && <p className="form-error">{error}</p>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Avbryt</button><button className="primary">Last opp og lagre</button></div></form></section></div>;
+function OrderDetails({
+  order,
+  customer,
+  onBack,
+  onInvoice,
+}: {
+  order: Order;
+  customer?: Customer;
+  onBack: () => void;
+  onInvoice: (id: string) => void;
+}) {
+  const [timeEntries, setTimeEntries] = useState<
+    Array<{
+      id: string;
+      workDate: string;
+      minutes: number;
+      ratePerHourOre: number;
+      description: string | null;
+    }>
+  >([]);
+  const [extraEntries, setExtraEntries] = useState<ExtraEntry[]>([]);
+  const [showTime, setShowTime] = useState(false);
+  const [entryKind, setEntryKind] = useState<EntryKind | null>(null);
+  async function loadEntries() {
+    const [timeResponse, extraResponse] = await Promise.all([
+      fetch(`/api/orders/${order.id}/time`, { cache: "no-store" }),
+      fetch(`/api/orders/${order.id}/entries`, { cache: "no-store" }),
+    ]);
+    const [timeData, extraData] = await Promise.all([
+      timeResponse.json(),
+      extraResponse.json(),
+    ]);
+    setTimeEntries(timeData.entries ?? []);
+    setExtraEntries(extraData.entries ?? []);
+  }
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/orders/${order.id}/time`, { cache: "no-store" }).then((r) =>
+        r.json(),
+      ),
+      fetch(`/api/orders/${order.id}/entries`, { cache: "no-store" }).then(
+        (r) => r.json(),
+      ),
+    ]).then(([timeData, extraData]) => {
+      setTimeEntries(timeData.entries ?? []);
+      setExtraEntries(extraData.entries ?? []);
+    });
+  }, [order.id]);
+  const totalOre =
+    timeEntries.reduce(
+      (sum, entry) =>
+        sum + Math.round((entry.minutes / 60) * entry.ratePerHourOre),
+      0,
+    ) + extraEntries.reduce((sum, entry) => sum + entry.amountOre, 0);
+  async function createInvoice() {
+    const response = await fetch(`/api/orders/${order.id}/invoice`, {
+      method: "POST",
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      window.alert(data.error);
+      return;
+    }
+    onInvoice(data.invoice.id);
+  }
+  return (
+    <div className="order-view">
+      <section className="order-hero">
+        <button className="back-button" onClick={onBack}>
+          ← Tilbake til ordrelisten
+        </button>
+        <div className="order-hero-main">
+          <div>
+            <p className="eyebrow">Ordre #{order.orderNumber} · Åpen</p>
+            <h1>{order.title}</h1>
+            <div className="order-meta">
+              <span>
+                <Building2 />
+                {customer?.name ?? "Ukjent kunde"}
+              </span>
+              <span>{order.workAddress || "Ingen arbeidsadresse"}</span>
+            </div>
+          </div>
+          <div className="order-amount">
+            <span>Registrert fakturerbart</span>
+            <strong>{(totalOre / 100).toLocaleString("nb-NO")} kr</strong>
+            <button
+              className="primary invoice-button"
+              onClick={createInvoice}
+              disabled={!totalOre}
+            >
+              <Sparkles />
+              Lag fakturautkast
+            </button>
+          </div>
+        </div>
+      </section>
+      <div className="quick-actions">
+        <button className="quick-action" onClick={() => setShowTime(true)}>
+          <Clock3 />+ TIMER
+        </button>
+        <button className="quick-action" onClick={() => setEntryKind("LINE")}>
+          <Package />+ LINJE
+        </button>
+        <button
+          className="quick-action"
+          onClick={() => setEntryKind("DRIVING")}
+        >
+          <Car />+ KJØRING
+        </button>
+        <button
+          className="quick-action"
+          onClick={() => setEntryKind("EXPENSE")}
+        >
+          <Receipt />+ UTLEGG
+        </button>
+        <button className="quick-action" onClick={() => setEntryKind("HOTEL")}>
+          <Hotel />+ HOTELL
+        </button>
+        <button className="quick-action" onClick={() => setEntryKind("IMAGE")}>
+          <Camera />+ BILDE
+        </button>
+        <button
+          className="quick-action"
+          onClick={() => setEntryKind("DOCUMENT")}
+        >
+          <FileText />+ DOKUMENT
+        </button>
+      </div>
+      {timeEntries.length || extraEntries.length ? (
+        <section className="panel time-list">
+          <div className="panel-head">
+            <div>
+              <h2>Jobbaktivitet</h2>
+              <p>Alt som er registrert på ordren</p>
+            </div>
+          </div>
+          {timeEntries.map((entry) => (
+            <div className="time-row activity-row" key={entry.id}>
+              <div>
+                <b>
+                  <Clock3 />
+                  {(entry.minutes / 60).toLocaleString("nb-NO")} timer
+                </b>
+                <span>
+                  {new Date(entry.workDate).toLocaleDateString("nb-NO")} ·{" "}
+                  {entry.description || "Arbeid på ordre"}
+                </span>
+              </div>
+              <strong>
+                {(
+                  ((entry.minutes / 60) * entry.ratePerHourOre) /
+                  100
+                ).toLocaleString("nb-NO")}{" "}
+                kr
+              </strong>
+            </div>
+          ))}
+          {extraEntries.map((entry) => (
+            <div className="time-row activity-row" key={entry.id}>
+              <div>
+                <b>{entry.title}</b>
+                <span>
+                  {new Date(entry.workDate).toLocaleDateString("nb-NO")} ·{" "}
+                  {entry.description || entry.fileName || "Registrert"}
+                </span>
+              </div>
+              <strong>
+                {entry.amountOre
+                  ? `${(entry.amountOre / 100).toLocaleString("nb-NO")} kr`
+                  : "Dokumentert"}
+              </strong>
+            </div>
+          ))}
+        </section>
+      ) : (
+        <section className="panel empty-state">
+          <div className="empty-icon">
+            <ClipboardList />
+          </div>
+          <h2>Ingen registreringer ennå</h2>
+          <p>
+            Bruk knappene over for timer, varer, kjøring, utlegg, hotell eller
+            dokumentasjon.
+          </p>
+        </section>
+      )}
+      {showTime && (
+        <TimeModal
+          orderId={order.id}
+          onClose={() => setShowTime(false)}
+          onSaved={async () => {
+            setShowTime(false);
+            await loadEntries();
+          }}
+        />
+      )}
+      {entryKind && (
+        <OrderEntryModal
+          orderId={order.id}
+          kind={entryKind}
+          onClose={() => setEntryKind(null)}
+          onSaved={async () => {
+            setEntryKind(null);
+            await loadEntries();
+          }}
+        />
+      )}
+    </div>
+  );
 }
 
-function TimeModal({ orderId, onClose, onSaved }: { orderId: string; onClose: () => void; onSaved: () => void }) {
-  const [error, setError] = useState(""); const today = new Date().toISOString().slice(0, 10);
-  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const raw = Object.fromEntries(new FormData(event.currentTarget).entries()); raw.rateOre = String(Math.round(Number(raw.rateOre || 0) * 100)); const response = await fetch(`/api/orders/${orderId}/time`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(raw) }); const data = await response.json(); if (!response.ok) { setError(data.error); return; } onSaved(); }
-  return <div className="modal-backdrop"><section className="entry-modal" role="dialog" aria-modal="true"><div className="modal-head"><div className="modal-title-icon"><Clock3 /></div><div><h2>Registrer timer</h2><p>Datoen gjør det enkelt å føre samme ordre over flere dager.</p></div><button className="icon-button" onClick={onClose}><X /></button></div><form onSubmit={submit}><div className="form-grid"><Field label="Arbeidsdato"><input name="workDate" type="date" defaultValue={today} required /></Field><Field label="Antall timer"><input name="hours" type="number" min="0.25" max="24" step="0.25" defaultValue="1" required /></Field><Field label="Timesats (kr)"><input name="rateOre" type="number" min="0" step="0.01" defaultValue="790" required /></Field><Field label="Beskrivelse" wide><input name="description" placeholder="Hva ble gjort?" /></Field></div>{error && <p className="form-error">{error}</p>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Avbryt</button><button className="primary">Lagre timer</button></div></form></section></div>;
+const entryLabels: Record<EntryKind, string> = {
+  LINE: "vare eller tjeneste",
+  DRIVING: "kjøring",
+  EXPENSE: "utlegg",
+  HOTEL: "hotell",
+  IMAGE: "bilde",
+  DOCUMENT: "dokument",
+};
+function OrderEntryModal({
+  orderId,
+  kind,
+  onClose,
+  onSaved,
+}: {
+  orderId: string;
+  kind: EntryKind;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [error, setError] = useState("");
+  const today = new Date().toISOString().slice(0, 10);
+  const financial = !["IMAGE", "DOCUMENT"].includes(kind);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    form.set("kind", kind);
+    let body: BodyInit;
+    const headers: HeadersInit = {};
+    if (financial) {
+      const raw: Record<string, unknown> = Object.fromEntries(form.entries());
+      for (const key of ["unitRateOre", "costOre"])
+        if (raw[key]) raw[key] = Math.round(Number(raw[key]) * 100);
+      if (raw.markupBasisPoints)
+        raw.markupBasisPoints = Math.round(Number(raw.markupBasisPoints) * 100);
+      body = JSON.stringify(raw);
+      headers["content-type"] = "application/json";
+    } else {
+      const file = form.get("file");
+      if (kind === "IMAGE" && file instanceof File)
+        form.set("file", await compressImage(file));
+      body = form;
+    }
+    const response = await fetch(`/api/orders/${orderId}/entries`, {
+      method: "POST",
+      headers,
+      body,
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setError(data.error);
+      return;
+    }
+    onSaved();
+  }
+  return (
+    <div className="modal-backdrop">
+      <section className="entry-modal" role="dialog" aria-modal="true">
+        <div className="modal-head">
+          <div className="modal-title-icon">
+            {kind === "DRIVING" ? (
+              <Car />
+            ) : kind === "EXPENSE" ? (
+              <Receipt />
+            ) : kind === "HOTEL" ? (
+              <Hotel />
+            ) : kind === "IMAGE" ? (
+              <Camera />
+            ) : kind === "DOCUMENT" ? (
+              <FileText />
+            ) : (
+              <Package />
+            )}
+          </div>
+          <div>
+            <h2>Legg til {entryLabels[kind]}</h2>
+            <p>Registreringen lagres permanent på ordren.</p>
+          </div>
+          <button className="icon-button" onClick={onClose}>
+            <X />
+          </button>
+        </div>
+        <form onSubmit={submit}>
+          <div className="form-grid">
+            <Field label="Dato">
+              <input
+                name="workDate"
+                type="date"
+                defaultValue={today}
+                required
+              />
+            </Field>
+            <Field
+              label={
+                kind === "DRIVING"
+                  ? "Strekning"
+                  : kind === "HOTEL"
+                    ? "Hotell"
+                    : kind === "IMAGE"
+                      ? "Bildetittel"
+                      : kind === "DOCUMENT"
+                        ? "Dokumenttittel"
+                        : "Navn"
+              }
+            >
+              <input name="title" required />
+            </Field>
+            {kind === "LINE" && (
+              <>
+                <Field label="Antall">
+                  <input
+                    name="quantity"
+                    type="number"
+                    step="0.001"
+                    defaultValue="1"
+                    required
+                  />
+                </Field>
+                <Field label="Enhet">
+                  <input name="unit" defaultValue="stk" required />
+                </Field>
+                <Field label="Pris per enhet (kr)">
+                  <input
+                    name="unitRateOre"
+                    type="number"
+                    step="0.01"
+                    required
+                  />
+                </Field>
+              </>
+            )}
+            {kind === "DRIVING" && (
+              <>
+                <Field label="Kilometer">
+                  <input name="quantity" type="number" step="0.1" required />
+                </Field>
+                <Field label="Kr per km">
+                  <input
+                    name="unitRateOre"
+                    type="number"
+                    step="0.01"
+                    required
+                  />
+                </Field>
+                <input type="hidden" name="unit" value="km" />
+              </>
+            )}
+            {(kind === "EXPENSE" || kind === "HOTEL") && (
+              <>
+                <Field label="Kostnad (kr)">
+                  <input name="costOre" type="number" step="0.01" required />
+                </Field>
+                <Field label="Påslag (%)">
+                  <input
+                    name="markupBasisPoints"
+                    type="number"
+                    step="0.01"
+                    defaultValue="0"
+                  />
+                </Field>
+              </>
+            )}
+            {!financial && (
+              <Field label="Velg fil" wide>
+                <input
+                  name="file"
+                  type="file"
+                  accept={
+                    kind === "IMAGE"
+                      ? "image/jpeg,image/png"
+                      : "application/pdf,image/jpeg,image/png"
+                  }
+                  required
+                />
+              </Field>
+            )}
+            <Field label="Beskrivelse" wide>
+              <input name="description" />
+            </Field>
+          </div>
+          {!financial && (
+            <p className="upload-note">
+              JPG, PNG eller PDF, maks 4 MB. Filen følger automatisk med
+              fakturavedlegget.
+            </p>
+          )}
+          {error && <p className="form-error">{error}</p>}
+          <div className="modal-actions">
+            <button type="button" className="secondary" onClick={onClose}>
+              Avbryt
+            </button>
+            <button className="primary">Last opp og lagre</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function TimeModal({
+  orderId,
+  onClose,
+  onSaved,
+}: {
+  orderId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [error, setError] = useState("");
+  const today = new Date().toISOString().slice(0, 10);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const raw = Object.fromEntries(new FormData(event.currentTarget).entries());
+    raw.rateOre = String(Math.round(Number(raw.rateOre || 0) * 100));
+    const response = await fetch(`/api/orders/${orderId}/time`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(raw),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setError(data.error);
+      return;
+    }
+    onSaved();
+  }
+  return (
+    <div className="modal-backdrop">
+      <section className="entry-modal" role="dialog" aria-modal="true">
+        <div className="modal-head">
+          <div className="modal-title-icon">
+            <Clock3 />
+          </div>
+          <div>
+            <h2>Registrer timer</h2>
+            <p>Datoen gjør det enkelt å føre samme ordre over flere dager.</p>
+          </div>
+          <button className="icon-button" onClick={onClose}>
+            <X />
+          </button>
+        </div>
+        <form onSubmit={submit}>
+          <div className="form-grid">
+            <Field label="Arbeidsdato">
+              <input
+                name="workDate"
+                type="date"
+                defaultValue={today}
+                required
+              />
+            </Field>
+            <Field label="Antall timer">
+              <input
+                name="hours"
+                type="number"
+                min="0.25"
+                max="24"
+                step="0.25"
+                defaultValue="1"
+                required
+              />
+            </Field>
+            <Field label="Timesats (kr)">
+              <input
+                name="rateOre"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue="790"
+                required
+              />
+            </Field>
+            <Field label="Beskrivelse" wide>
+              <input name="description" placeholder="Hva ble gjort?" />
+            </Field>
+          </div>
+          {error && <p className="form-error">{error}</p>}
+          <div className="modal-actions">
+            <button type="button" className="secondary" onClick={onClose}>
+              Avbryt
+            </button>
+            <button className="primary">Lagre timer</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
 }
 
 function InvoicesScreen({ onOpen }: { onOpen: (id: string) => void }) {
-  const [rows, setRows] = useState<Array<{ id: string; invoiceNumber: number | null; status: string; totalOre: number; dueDate: string | null; customerName: string; orderNumber: number; orderTitle: string }>>([]); const [loading, setLoading] = useState(true);
-  useEffect(() => { fetch("/api/invoices", { cache: "no-store" }).then((r) => r.json()).then((data) => { setRows(data.invoices ?? []); setLoading(false); }); }, []);
-  const label = (invoice: typeof rows[number]) => invoice.status === "PAID" ? "Betalt" : invoice.status === "DRAFT" ? "Utkast" : invoice.dueDate && new Date(invoice.dueDate) < new Date() ? "Forfalt" : invoice.status === "PARTIALLY_PAID" ? "Delbetalt" : "Ikke betalt";
-  return <><div className="page-heading"><div><p className="eyebrow">Fakturering</p><h1>Fakturaer</h1><p className="subhead">Gul venter på betaling, rød er forfalt og grønn er betalt.</p></div></div>{loading ? <section className="panel empty-state"><p>Laster fakturaer…</p></section> : rows.length ? <section className="panel invoice-list">{rows.map((invoice) => <button key={invoice.id} onClick={() => onOpen(invoice.id)}><div><span>{invoice.invoiceNumber ? `FAKTURA #${invoice.invoiceNumber}` : "FAKTURAUTKAST"}</span><b>{invoice.customerName}</b><small>Ordre #{invoice.orderNumber} · {invoice.orderTitle}</small></div><strong>{(invoice.totalOre / 100).toLocaleString("nb-NO")} kr</strong><em className={`payment-${label(invoice).toLowerCase().replace(" ", "-")}`}>{label(invoice)}</em><ChevronRight /></button>)}</section> : <section className="panel empty-state"><div className="empty-icon"><FileText /></div><h2>Ingen fakturautkast ennå</h2><p>Åpne en ordre med registrerte poster og velg «Lag fakturautkast».</p></section>}</>;
+  const [rows, setRows] = useState<
+    Array<{
+      id: string;
+      invoiceNumber: number | null;
+      status: string;
+      totalOre: number;
+      dueDate: string | null;
+      customerName: string;
+      orderNumber: number;
+      orderTitle: string;
+    }>
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("ALL");
+  useEffect(() => {
+    fetch("/api/invoices", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        setRows(data.invoices ?? []);
+        setLoading(false);
+      });
+  }, []);
+  const label = (invoice: (typeof rows)[number]) =>
+    invoice.status === "PAID"
+      ? "Betalt"
+      : invoice.status === "DRAFT"
+        ? "Utkast"
+        : invoice.dueDate && new Date(invoice.dueDate) < new Date()
+          ? "Forfalt"
+          : invoice.status === "PARTIALLY_PAID"
+            ? "Delbetalt"
+            : "Ikke betalt";
+  const visible = rows.filter((invoice) => {
+    const status = label(invoice);
+    const matchesFilter = filter === "ALL" || status === filter;
+    const haystack =
+      `${invoice.invoiceNumber ?? ""} ${invoice.customerName} ${invoice.orderNumber} ${invoice.orderTitle}`.toLowerCase();
+    return matchesFilter && haystack.includes(query.trim().toLowerCase());
+  });
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Fakturaarkiv</p>
+          <h1>Fakturaer</h1>
+          <p className="subhead">
+            Gul venter på betaling, rød er forfalt og grønn er betalt.
+          </p>
+        </div>
+      </div>
+      {rows.length > 0 && (
+        <div className="archive-tools">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Søk på fakturanummer, kunde eller ordre"
+            aria-label="Søk i fakturaarkivet"
+          />
+          <select
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            aria-label="Filtrer fakturaer"
+          >
+            <option value="ALL">Alle statuser</option>
+            <option>Utkast</option>
+            <option>Ikke betalt</option>
+            <option>Forfalt</option>
+            <option>Delbetalt</option>
+            <option>Betalt</option>
+          </select>
+        </div>
+      )}
+      {loading ? (
+        <section className="panel empty-state">
+          <p>Laster fakturaer…</p>
+        </section>
+      ) : visible.length ? (
+        <section className="panel invoice-list">
+          {visible.map((invoice) => (
+            <button key={invoice.id} onClick={() => onOpen(invoice.id)}>
+              <div>
+                <span>
+                  {invoice.invoiceNumber
+                    ? `FAKTURA #${invoice.invoiceNumber}`
+                    : "FAKTURAUTKAST"}
+                </span>
+                <b>{invoice.customerName}</b>
+                <small>
+                  Ordre #{invoice.orderNumber} · {invoice.orderTitle}
+                </small>
+              </div>
+              <strong>
+                {(invoice.totalOre / 100).toLocaleString("nb-NO")} kr
+              </strong>
+              <em
+                className={`payment-${label(invoice).toLowerCase().replace(" ", "-")}`}
+              >
+                {label(invoice)}
+              </em>
+              <ChevronRight />
+            </button>
+          ))}
+        </section>
+      ) : rows.length ? (
+        <section className="panel empty-state">
+          <h2>Ingen treff</h2>
+          <p>Prøv et annet søk eller statusfilter.</p>
+        </section>
+      ) : (
+        <section className="panel empty-state">
+          <div className="empty-icon">
+            <FileText />
+          </div>
+          <h2>Ingen fakturautkast ennå</h2>
+          <p>
+            Åpne en ordre med registrerte poster og velg «Lag fakturautkast».
+          </p>
+        </section>
+      )}
+    </>
+  );
 }
 
-function InvoiceScreen({ invoiceId, onBack }: { invoiceId: string; onBack: () => void }) {
-  type Preflight = { canFinalize: boolean; errors: string[]; warnings: string[] };
-  const [data, setData] = useState<{ invoice: Record<string, unknown>; lines: Array<{ id: string; description: string; quantityThousandths: number; unit: string; unitPriceOre: number; vatBasisPoints: number; subtotalOre: number; vatAmountOre: number; totalOre: number }> } | null>(null);
-  const [preflight, setPreflight] = useState<Preflight | null>(null); const [confirmed, setConfirmed] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  async function load() { const [invoiceResponse, checkResponse] = await Promise.all([fetch(`/api/invoices/${invoiceId}`, { cache: "no-store" }), fetch(`/api/invoices/${invoiceId}/preflight`, { cache: "no-store" })]); setData(await invoiceResponse.json()); setPreflight(await checkResponse.json()); }
-  useEffect(() => { load(); }, [invoiceId]);
-  if (!data?.invoice) return <section className="panel empty-state"><p>Laster fakturautkast…</p></section>;
-  const invoice = data.invoice; const company = (invoice.organizationSnapshot ?? {}) as Record<string, unknown>; const customer = (invoice.customerSnapshot ?? {}) as Record<string, unknown>;
+function InvoiceScreen({
+  invoiceId,
+  onBack,
+}: {
+  invoiceId: string;
+  onBack: () => void;
+}) {
+  type Preflight = {
+    canFinalize: boolean;
+    errors: string[];
+    warnings: string[];
+  };
+  const [data, setData] = useState<{
+    invoice: Record<string, unknown>;
+    lines: Array<{
+      id: string;
+      description: string;
+      quantityThousandths: number;
+      unit: string;
+      unitPriceOre: number;
+      vatBasisPoints: number;
+      subtotalOre: number;
+      vatAmountOre: number;
+      totalOre: number;
+    }>;
+  } | null>(null);
+  const [preflight, setPreflight] = useState<Preflight | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function load() {
+    const [invoiceResponse, checkResponse] = await Promise.all([
+      fetch(`/api/invoices/${invoiceId}`, { cache: "no-store" }),
+      fetch(`/api/invoices/${invoiceId}/preflight`, { cache: "no-store" }),
+    ]);
+    setData(await invoiceResponse.json());
+    setPreflight(await checkResponse.json());
+  }
+  useEffect(() => {
+    load();
+  }, [invoiceId]);
+  if (!data?.invoice)
+    return (
+      <section className="panel empty-state">
+        <p>Laster fakturautkast…</p>
+      </section>
+    );
+  const invoice = data.invoice;
+  const company = (invoice.organizationSnapshot ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const customer = (invoice.customerSnapshot ?? {}) as Record<string, unknown>;
   const finalized = invoice.status !== "DRAFT";
-  async function finalize() { setBusy(true); setError(""); const response = await fetch(`/api/invoices/${invoiceId}/finalize`, { method: "POST" }); const value = await response.json(); if (!response.ok) { setError(value.error ?? "Kunne ikke finalisere fakturaen."); setPreflight(value.preflight ?? preflight); setBusy(false); return; } await load(); setConfirmed(false); setBusy(false); }
-  async function registerPayment() { const remaining = Number(invoice.remainingAmountOre ?? invoice.totalOre); const entered = window.prompt("Innbetalt beløp i kroner", String(remaining / 100)); if (!entered) return; const amountOre = Math.round(Number(entered.replace(",", ".")) * 100); if (!Number.isFinite(amountOre) || amountOre <= 0) return; setBusy(true); const response = await fetch(`/api/invoices/${invoiceId}/payments`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ amountOre, paidAt: new Date().toISOString().slice(0, 10) }) }); const value = await response.json(); if (!response.ok) setError(value.error); else await load(); setBusy(false); }
-  return <div className="invoice-view"><div className="invoice-top"><div><button className="back-button dark" onClick={onBack}>← Tilbake til fakturaer</button><p className="eyebrow">{finalized ? "Finalisert faktura" : "Fakturautkast"}</p><h1>{finalized ? `Faktura #${String(invoice.invoiceNumber)}` : "Kontroller fakturagrunnlaget"}</h1><p className="subhead">{finalized ? "Fakturaen er låst og klar for utsending." : "Kontroller opplysningene før fakturanummeret låses."}</p></div><div className="invoice-actions"><a className="secondary" href={`/api/invoices/${invoiceId}/pdf`}><Download />Last ned PDF</a></div></div><div className="invoice-layout"><section className="invoice-paper"><div className="invoice-paper-head"><div className="invoice-logo"><span>OK</span><b>{String(company.name ?? "Ditt firma")}</b></div><div className="invoice-title"><span>{finalized ? "FAKTURA" : "FAKTURAUTKAST"}</span><strong>{finalized ? `#${String(invoice.invoiceNumber)}` : "Ikke sendt"}</strong></div></div><div className="invoice-parties"><div><small>FAKTURERES TIL</small><b>{String(customer.name ?? "Kunde")}</b><span>{String(customer.address ?? "")}<br />{String(customer.postalCode ?? "")} {String(customer.city ?? "")}</span></div><div className="invoice-dates"><p><span>Fakturadato</span><b>{new Date(String(invoice.issueDate)).toLocaleDateString("nb-NO")}</b></p><p><span>Forfall</span><b>{new Date(String(invoice.dueDate)).toLocaleDateString("nb-NO")}</b></p></div></div><div className="invoice-table"><div className="invoice-table-row head"><span>Beskrivelse</span><span>Antall</span><span>Pris</span><span>Beløp</span></div>{data.lines.map((line) => <div className="invoice-table-row" key={line.id}><span>{line.description}</span><span>{(line.quantityThousandths / 1000).toLocaleString("nb-NO")} {line.unit}</span><span>{(line.unitPriceOre / 100).toLocaleString("nb-NO")} kr</span><span>{(line.subtotalOre / 100).toLocaleString("nb-NO")} kr</span></div>)}</div><div className="invoice-totals"><p><span>Netto</span><b>{(Number(invoice.subtotalOre) / 100).toLocaleString("nb-NO")} kr</b></p><p><span>MVA</span><b>{(Number(invoice.vatAmountOre) / 100).toLocaleString("nb-NO")} kr</b></p><p className="grand-total"><span>Å betale</span><b>{(Number(invoice.totalOre) / 100).toLocaleString("nb-NO")} kr</b></p></div><div className="invoice-footer"><span>{String(company.invoiceEmail || company.email || "")} {company.invoicePhone || company.phone ? `· ${String(company.invoicePhone || company.phone)}` : ""}</span><span>{company.organizationNumber ? `Org.nr. ${String(company.organizationNumber)}` : ""}</span></div></section><aside className="panel invoice-check"><div className="panel-head"><div><h2>Ferdigstillingskontroll</h2><p>{finalized ? "Fakturanummeret er låst" : "Må være i orden før finalisering"}</p></div></div><div className="invoice-check-body">{finalized ? <div className="secure-note"><LockKeyhole /><div><b>Faktura #{String(invoice.invoiceNumber)} er finalisert</b><span>Registreringene og fakturanummeret er låst.</span></div></div> : <><div className="check-summary"><b>{preflight?.canFinalize ? "Klar for finalisering" : "Noe må kompletteres"}</b><span>{preflight?.canFinalize ? "Advarsler stopper ikke finalisering." : "Rett feilene og lag utkastet på nytt."}</span></div><div className="check-list">{preflight?.errors.map((item) => <div className="check warn" key={item}><AlertTriangle />{item}</div>)}{preflight?.warnings.map((item) => <div className="check warn" key={item}><AlertTriangle />{item}</div>)}{preflight?.canFinalize && <div className="check"><CheckCircle2 />Beløp og påkrevde opplysninger er kontrollert.</div>}</div><label className="confirm-row"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>Jeg har kontrollert fakturaen og forstår at fakturanummeret låses.</span></label>{error && <p className="form-error">{error}</p>}<button className="primary full" onClick={finalize} disabled={!preflight?.canFinalize || !confirmed || busy}>{busy ? "Finaliserer…" : "Finaliser og tildel fakturanummer"}</button></>}</div></aside></div></div>;
+  async function finalize() {
+    setBusy(true);
+    setError("");
+    const response = await fetch(`/api/invoices/${invoiceId}/finalize`, {
+      method: "POST",
+    });
+    const value = await response.json();
+    if (!response.ok) {
+      setError(value.error ?? "Kunne ikke finalisere fakturaen.");
+      setPreflight(value.preflight ?? preflight);
+      setBusy(false);
+      return;
+    }
+    await load();
+    setConfirmed(false);
+    setBusy(false);
+  }
+  async function registerPayment() {
+    const remaining = Number(invoice.remainingAmountOre ?? invoice.totalOre);
+    const entered = window.prompt(
+      "Innbetalt beløp i kroner",
+      String(remaining / 100),
+    );
+    if (!entered) return;
+    const amountOre = Math.round(Number(entered.replace(",", ".")) * 100);
+    if (!Number.isFinite(amountOre) || amountOre <= 0) return;
+    setBusy(true);
+    const response = await fetch(`/api/invoices/${invoiceId}/payments`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        amountOre,
+        paidAt: new Date().toISOString().slice(0, 10),
+      }),
+    });
+    const value = await response.json();
+    if (!response.ok) setError(value.error);
+    else await load();
+    setBusy(false);
+  }
+  return (
+    <div className="invoice-view">
+      <div className="invoice-top">
+        <div>
+          <button className="back-button dark" onClick={onBack}>
+            ← Tilbake til fakturaer
+          </button>
+          <p className="eyebrow">
+            {finalized ? "Finalisert faktura" : "Fakturautkast"}
+          </p>
+          <h1>
+            {finalized
+              ? `Faktura #${String(invoice.invoiceNumber)}`
+              : "Kontroller fakturagrunnlaget"}
+          </h1>
+          <p className="subhead">
+            {finalized
+              ? "Fakturaen er låst og klar for utsending."
+              : "Kontroller opplysningene før fakturanummeret låses."}
+          </p>
+        </div>
+        <div className="invoice-actions">
+          <a className="secondary" href={`/api/invoices/${invoiceId}/pdf`}>
+            <Download />
+            Last ned PDF
+          </a>
+          {finalized && invoice.status !== "PAID" && invoice.status !== "VOID" && (
+            <button className="primary" onClick={registerPayment} disabled={busy}>
+              <CheckCircle2 />
+              Registrer betaling
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="invoice-layout">
+        <section className="invoice-paper">
+          <div className="invoice-paper-head">
+            <div className="invoice-logo">
+              <span>OK</span>
+              <b>{String(company.name ?? "Ditt firma")}</b>
+            </div>
+            <div className="invoice-title">
+              <span>{finalized ? "FAKTURA" : "FAKTURAUTKAST"}</span>
+              <strong>
+                {finalized ? `#${String(invoice.invoiceNumber)}` : "Ikke sendt"}
+              </strong>
+            </div>
+          </div>
+          <div className="invoice-parties">
+            <div>
+              <small>FAKTURERES TIL</small>
+              <b>{String(customer.name ?? "Kunde")}</b>
+              <span>
+                {String(customer.address ?? "")}
+                <br />
+                {String(customer.postalCode ?? "")}{" "}
+                {String(customer.city ?? "")}
+              </span>
+            </div>
+            <div className="invoice-dates">
+              <p>
+                <span>Fakturadato</span>
+                <b>
+                  {new Date(String(invoice.issueDate)).toLocaleDateString(
+                    "nb-NO",
+                  )}
+                </b>
+              </p>
+              <p>
+                <span>Forfall</span>
+                <b>
+                  {new Date(String(invoice.dueDate)).toLocaleDateString(
+                    "nb-NO",
+                  )}
+                </b>
+              </p>
+            </div>
+          </div>
+          <div className="invoice-table">
+            <div className="invoice-table-row head">
+              <span>Beskrivelse</span>
+              <span>Antall</span>
+              <span>Pris</span>
+              <span>Beløp</span>
+            </div>
+            {data.lines.map((line) => (
+              <div className="invoice-table-row" key={line.id}>
+                <span>{line.description}</span>
+                <span>
+                  {(line.quantityThousandths / 1000).toLocaleString("nb-NO")}{" "}
+                  {line.unit}
+                </span>
+                <span>
+                  {(line.unitPriceOre / 100).toLocaleString("nb-NO")} kr
+                </span>
+                <span>
+                  {(line.subtotalOre / 100).toLocaleString("nb-NO")} kr
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="invoice-totals">
+            <p>
+              <span>Netto</span>
+              <b>
+                {(Number(invoice.subtotalOre) / 100).toLocaleString("nb-NO")} kr
+              </b>
+            </p>
+            <p>
+              <span>MVA</span>
+              <b>
+                {(Number(invoice.vatAmountOre) / 100).toLocaleString("nb-NO")}{" "}
+                kr
+              </b>
+            </p>
+            <p className="grand-total">
+              <span>Å betale</span>
+              <b>
+                {(Number(invoice.totalOre) / 100).toLocaleString("nb-NO")} kr
+              </b>
+            </p>
+          </div>
+          <div className="invoice-footer">
+            <span>
+              {String(company.invoiceEmail || company.email || "")}{" "}
+              {company.invoicePhone || company.phone
+                ? `· ${String(company.invoicePhone || company.phone)}`
+                : ""}
+            </span>
+            <span>
+              {company.organizationNumber
+                ? `Org.nr. ${String(company.organizationNumber)}`
+                : ""}
+            </span>
+          </div>
+        </section>
+        <aside className="panel invoice-check">
+          <div className="panel-head">
+            <div>
+              <h2>Ferdigstillingskontroll</h2>
+              <p>
+                {finalized
+                  ? "Fakturanummeret er låst"
+                  : "Må være i orden før finalisering"}
+              </p>
+            </div>
+          </div>
+          <div className="invoice-check-body">
+            {finalized ? (
+              <div className="secure-note">
+                <LockKeyhole />
+                <div>
+                  <b>Faktura #{String(invoice.invoiceNumber)} er finalisert</b>
+                  <span>Registreringene og fakturanummeret er låst.</span>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="check-summary">
+                  <b>
+                    {preflight?.canFinalize
+                      ? "Klar for finalisering"
+                      : "Noe må kompletteres"}
+                  </b>
+                  <span>
+                    {preflight?.canFinalize
+                      ? "Advarsler stopper ikke finalisering."
+                      : "Rett feilene og lag utkastet på nytt."}
+                  </span>
+                </div>
+                <div className="check-list">
+                  {preflight?.errors.map((item) => (
+                    <div className="check warn" key={item}>
+                      <AlertTriangle />
+                      {item}
+                    </div>
+                  ))}
+                  {preflight?.warnings.map((item) => (
+                    <div className="check warn" key={item}>
+                      <AlertTriangle />
+                      {item}
+                    </div>
+                  ))}
+                  {preflight?.canFinalize && (
+                    <div className="check">
+                      <CheckCircle2 />
+                      Beløp og påkrevde opplysninger er kontrollert.
+                    </div>
+                  )}
+                </div>
+                <label className="confirm-row">
+                  <input
+                    type="checkbox"
+                    checked={confirmed}
+                    onChange={(event) => setConfirmed(event.target.checked)}
+                  />
+                  <span>
+                    Jeg har kontrollert fakturaen og forstår at fakturanummeret
+                    låses.
+                  </span>
+                </label>
+                {error && <p className="form-error">{error}</p>}
+                <button
+                  className="primary full"
+                  onClick={finalize}
+                  disabled={!preflight?.canFinalize || !confirmed || busy}
+                >
+                  {busy ? "Finaliserer…" : "Finaliser og tildel fakturanummer"}
+                </button>
+              </>
+            )}
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
 }
 
 function SettingsScreen({ onSaved }: { onSaved: (message: string) => void }) {
-  const [profile, setProfile] = useState<ProfileData | null>(null); const [error, setError] = useState("");
-  async function load() { const response = await fetch("/api/profile", { cache: "no-store" }); setProfile(await response.json()); }
-  useEffect(() => { fetch("/api/profile", { cache: "no-store" }).then((r) => r.json()).then(setProfile); }, []);
-  if (!profile?.organization || !profile.settings) return <section className="panel empty-state"><p>Laster firmaprofil…</p></section>;
-  const org = profile.organization; const settings = profile.settings;
-  async function saveProfile(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setError(""); const raw = Object.fromEntries(new FormData(event.currentTarget).entries()); const ore = ["defaultHourlyRateOre", "mileageRateOre", "dietDayRateOre", "dietOvernightRateOre"]; const basis = ["defaultVatBasisPoints", "hotelMarkupBasisPoints", "expenseMarkupBasisPoints"]; for (const key of ore) raw[key] = String(Math.round(Number(raw[key] || 0) * 100)); for (const key of basis) raw[key] = String(Math.round(Number(raw[key] || 0) * 100)); const response = await fetch("/api/profile", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(raw) }); const result = await response.json(); if (!response.ok) { setError(result.error); return; } onSaved("Firmaprofil og satser er lagret"); await load(); }
-  async function addProduct(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const raw = Object.fromEntries(new FormData(event.currentTarget).entries()); raw.priceOre = String(Math.round(Number(raw.priceOre || 0) * 100)); raw.vatBasisPoints = String(Math.round(Number(raw.vatBasisPoints || 0) * 100)); const response = await fetch("/api/products", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(raw) }); if (response.ok) { event.currentTarget.reset(); onSaved("Standard vare eller tjeneste er lagt til"); await load(); } }
-  return <><div className="page-heading"><div><p className="eyebrow">Innstillinger</p><h1>Firmaprofil og standardsatser</h1><p className="subhead">Disse opplysningene brukes som standard på ordre og faktura.</p></div></div><form className="settings-grid" onSubmit={saveProfile}><section className="panel settings-card"><div className="panel-head"><div><h2>Firmaopplysninger</h2><p>Opplysninger som kan vises på fakturaen</p></div></div><div className="settings-fields"><Field label="Firmanavn" wide><input name="name" defaultValue={String(org.name ?? "")} required /></Field><Field label="Organisasjonsnummer"><input name="organizationNumber" defaultValue={String(org.organizationNumber ?? "")} /></Field><Field label="Bankkonto"><input name="bankAccount" defaultValue={String(org.bankAccount ?? "")} /></Field><Field label="Firmaets e-post"><input name="email" type="email" defaultValue={String(org.email ?? "")} /></Field><Field label="Firmaets telefon"><input name="phone" defaultValue={String(org.phone ?? "")} /></Field><Field label="Adresse" wide><input name="address" defaultValue={String(org.address ?? "")} /></Field><Field label="Postnummer"><input name="postalCode" defaultValue={String(org.postalCode ?? "")} /></Field><Field label="Sted"><input name="city" defaultValue={String(org.city ?? "")} /></Field><Field label="E-post på faktura"><input name="invoiceEmail" type="email" defaultValue={String(org.invoiceEmail ?? "")} /></Field><Field label="Telefon på faktura"><input name="invoicePhone" defaultValue={String(org.invoicePhone ?? "")} /></Field></div><div className="logo-placeholder"><Building2 /><div><b>Firmalogo</b><span>Bildeopplasting kobles til sikker fillagring i neste steg.</span></div></div></section><section className="panel settings-card"><div className="panel-head"><div><h2>Standardsatser</h2><p>Kan overstyres på hver ordre</p></div></div><div className="settings-fields"><Field label="Timesats (kr)"><input name="defaultHourlyRateOre" type="number" step="0.01" defaultValue={Number(org.defaultHourlyRateOre ?? 0) / 100} /></Field><Field label="Kilometersats (kr)"><input name="mileageRateOre" type="number" step="0.01" defaultValue={Number(settings.mileageRateOre ?? 0) / 100} /></Field><Field label="Diett dag (kr)"><input name="dietDayRateOre" type="number" step="0.01" defaultValue={Number(settings.dietDayRateOre ?? 0) / 100} /></Field><Field label="Diett overnatting (kr)"><input name="dietOvernightRateOre" type="number" step="0.01" defaultValue={Number(settings.dietOvernightRateOre ?? 0) / 100} /></Field><Field label="Hotellpåslag (%)"><input name="hotelMarkupBasisPoints" type="number" step="0.01" defaultValue={Number(settings.hotelMarkupBasisPoints ?? 0) / 100} /></Field><Field label="Utleggspåslag (%)"><input name="expenseMarkupBasisPoints" type="number" step="0.01" defaultValue={Number(settings.expenseMarkupBasisPoints ?? 0) / 100} /></Field><Field label="Standard MVA (%)"><input name="defaultVatBasisPoints" type="number" step="0.01" defaultValue={Number(org.defaultVatBasisPoints ?? 2500) / 100} /></Field><Field label="Betalingsfrist (dager)"><input name="defaultPaymentTermsDays" type="number" defaultValue={Number(org.defaultPaymentTermsDays ?? 14)} /></Field></div>{error && <p className="form-error">{error}</p>}<div className="settings-save"><button className="primary">Lagre profil og satser</button></div></section></form><section className="panel settings-card product-settings"><div className="panel-head"><div><h2>Standard varer og tjenester</h2><p>Brukes som hurtigvalg på ordrene</p></div></div><form className="product-form" onSubmit={addProduct}><input name="name" placeholder="Navn" required /><select name="category"><option>Tjeneste</option><option>Vare</option><option>Tillegg</option></select><input name="unit" placeholder="Enhet, f.eks. time" required /><input name="priceOre" type="number" step="0.01" placeholder="Pris kr" required /><input name="vatBasisPoints" type="number" step="0.01" defaultValue="25" aria-label="MVA prosent" /><button className="primary"><Plus />Legg til</button></form>{profile.products.length ? <div className="product-list">{profile.products.map((product) => <div key={product.id}><b>{product.name}</b><span>{(product.defaultPriceOre / 100).toLocaleString("nb-NO")} kr / {product.unit} · {product.vatBasisPoints / 100}% MVA</span></div>)}</div> : <p className="settings-empty">Ingen standardvarer eller tjenester ennå.</p>}</section></>;
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [error, setError] = useState("");
+  async function load() {
+    const response = await fetch("/api/profile", { cache: "no-store" });
+    setProfile(await response.json());
+  }
+  useEffect(() => {
+    fetch("/api/profile", { cache: "no-store" })
+      .then((r) => r.json())
+      .then(setProfile);
+  }, []);
+  if (!profile?.organization || !profile.settings)
+    return (
+      <section className="panel empty-state">
+        <p>Laster firmaprofil…</p>
+      </section>
+    );
+  const org = profile.organization;
+  const settings = profile.settings;
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const raw = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const ore = [
+      "defaultHourlyRateOre",
+      "mileageRateOre",
+      "dietDayRateOre",
+      "dietOvernightRateOre",
+    ];
+    const basis = [
+      "defaultVatBasisPoints",
+      "hotelMarkupBasisPoints",
+      "expenseMarkupBasisPoints",
+    ];
+    for (const key of ore)
+      raw[key] = String(Math.round(Number(raw[key] || 0) * 100));
+    for (const key of basis)
+      raw[key] = String(Math.round(Number(raw[key] || 0) * 100));
+    const response = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(raw),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      setError(result.error);
+      return;
+    }
+    onSaved("Firmaprofil og satser er lagret");
+    await load();
+  }
+  async function addProduct(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const raw = Object.fromEntries(new FormData(event.currentTarget).entries());
+    raw.priceOre = String(Math.round(Number(raw.priceOre || 0) * 100));
+    raw.vatBasisPoints = String(
+      Math.round(Number(raw.vatBasisPoints || 0) * 100),
+    );
+    const response = await fetch("/api/products", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(raw),
+    });
+    if (response.ok) {
+      event.currentTarget.reset();
+      onSaved("Standard vare eller tjeneste er lagt til");
+      await load();
+    }
+  }
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Innstillinger</p>
+          <h1>Firmaprofil og standardsatser</h1>
+          <p className="subhead">
+            Disse opplysningene brukes som standard på ordre og faktura.
+          </p>
+        </div>
+      </div>
+      <form className="settings-grid" onSubmit={saveProfile}>
+        <section className="panel settings-card">
+          <div className="panel-head">
+            <div>
+              <h2>Firmaopplysninger</h2>
+              <p>Opplysninger som kan vises på fakturaen</p>
+            </div>
+          </div>
+          <div className="settings-fields">
+            <Field label="Firmanavn" wide>
+              <input
+                name="name"
+                defaultValue={String(org.name ?? "")}
+                required
+              />
+            </Field>
+            <Field label="Organisasjonsnummer">
+              <input
+                name="organizationNumber"
+                defaultValue={String(org.organizationNumber ?? "")}
+              />
+            </Field>
+            <Field label="Bankkonto">
+              <input
+                name="bankAccount"
+                defaultValue={String(org.bankAccount ?? "")}
+              />
+            </Field>
+            <Field label="Firmaets e-post">
+              <input
+                name="email"
+                type="email"
+                defaultValue={String(org.email ?? "")}
+              />
+            </Field>
+            <Field label="Firmaets telefon">
+              <input name="phone" defaultValue={String(org.phone ?? "")} />
+            </Field>
+            <Field label="Adresse" wide>
+              <input name="address" defaultValue={String(org.address ?? "")} />
+            </Field>
+            <Field label="Postnummer">
+              <input
+                name="postalCode"
+                defaultValue={String(org.postalCode ?? "")}
+              />
+            </Field>
+            <Field label="Sted">
+              <input name="city" defaultValue={String(org.city ?? "")} />
+            </Field>
+            <Field label="E-post på faktura">
+              <input
+                name="invoiceEmail"
+                type="email"
+                defaultValue={String(org.invoiceEmail ?? "")}
+              />
+            </Field>
+            <Field label="Telefon på faktura">
+              <input
+                name="invoicePhone"
+                defaultValue={String(org.invoicePhone ?? "")}
+              />
+            </Field>
+          </div>
+          <div className="logo-placeholder">
+            <Building2 />
+            <div>
+              <b>Firmalogo</b>
+              <span>
+                Bildeopplasting kobles til sikker fillagring i neste steg.
+              </span>
+            </div>
+          </div>
+        </section>
+        <section className="panel settings-card">
+          <div className="panel-head">
+            <div>
+              <h2>Standardsatser</h2>
+              <p>Kan overstyres på hver ordre</p>
+            </div>
+          </div>
+          <div className="settings-fields">
+            <Field label="Timesats (kr)">
+              <input
+                name="defaultHourlyRateOre"
+                type="number"
+                step="0.01"
+                defaultValue={Number(org.defaultHourlyRateOre ?? 0) / 100}
+              />
+            </Field>
+            <Field label="Kilometersats (kr)">
+              <input
+                name="mileageRateOre"
+                type="number"
+                step="0.01"
+                defaultValue={Number(settings.mileageRateOre ?? 0) / 100}
+              />
+            </Field>
+            <Field label="Diett dag (kr)">
+              <input
+                name="dietDayRateOre"
+                type="number"
+                step="0.01"
+                defaultValue={Number(settings.dietDayRateOre ?? 0) / 100}
+              />
+            </Field>
+            <Field label="Diett overnatting (kr)">
+              <input
+                name="dietOvernightRateOre"
+                type="number"
+                step="0.01"
+                defaultValue={Number(settings.dietOvernightRateOre ?? 0) / 100}
+              />
+            </Field>
+            <Field label="Hotellpåslag (%)">
+              <input
+                name="hotelMarkupBasisPoints"
+                type="number"
+                step="0.01"
+                defaultValue={
+                  Number(settings.hotelMarkupBasisPoints ?? 0) / 100
+                }
+              />
+            </Field>
+            <Field label="Utleggspåslag (%)">
+              <input
+                name="expenseMarkupBasisPoints"
+                type="number"
+                step="0.01"
+                defaultValue={
+                  Number(settings.expenseMarkupBasisPoints ?? 0) / 100
+                }
+              />
+            </Field>
+            <Field label="Standard MVA (%)">
+              <input
+                name="defaultVatBasisPoints"
+                type="number"
+                step="0.01"
+                defaultValue={Number(org.defaultVatBasisPoints ?? 2500) / 100}
+              />
+            </Field>
+            <Field label="Betalingsfrist (dager)">
+              <input
+                name="defaultPaymentTermsDays"
+                type="number"
+                defaultValue={Number(org.defaultPaymentTermsDays ?? 14)}
+              />
+            </Field>
+          </div>
+          {error && <p className="form-error">{error}</p>}
+          <div className="settings-save">
+            <button className="primary">Lagre profil og satser</button>
+          </div>
+        </section>
+      </form>
+      <section className="panel settings-card product-settings">
+        <div className="panel-head">
+          <div>
+            <h2>Standard varer og tjenester</h2>
+            <p>Brukes som hurtigvalg på ordrene</p>
+          </div>
+        </div>
+        <form className="product-form" onSubmit={addProduct}>
+          <input name="name" placeholder="Navn" required />
+          <select name="category">
+            <option>Tjeneste</option>
+            <option>Vare</option>
+            <option>Tillegg</option>
+          </select>
+          <input name="unit" placeholder="Enhet, f.eks. time" required />
+          <input
+            name="priceOre"
+            type="number"
+            step="0.01"
+            placeholder="Pris kr"
+            required
+          />
+          <input
+            name="vatBasisPoints"
+            type="number"
+            step="0.01"
+            defaultValue="25"
+            aria-label="MVA prosent"
+          />
+          <button className="primary">
+            <Plus />
+            Legg til
+          </button>
+        </form>
+        {profile.products.length ? (
+          <div className="product-list">
+            {profile.products.map((product) => (
+              <div key={product.id}>
+                <b>{product.name}</b>
+                <span>
+                  {(product.defaultPriceOre / 100).toLocaleString("nb-NO")} kr /{" "}
+                  {product.unit} · {product.vatBasisPoints / 100}% MVA
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="settings-empty">
+            Ingen standardvarer eller tjenester ennå.
+          </p>
+        )}
+      </section>
+    </>
+  );
 }
 
-function CreateModal({ kind, customers, onClose, onCreated }: { kind: Exclude<Modal, null>; customers: Customer[]; onClose: () => void; onCreated: (message: string) => void }) {
-  const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
-  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); setError(""); const values = Object.fromEntries(new FormData(event.currentTarget).entries()); try { const response = await fetch(kind === "customer" ? "/api/customers" : "/api/orders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(values) }); const data = await response.json(); if (!response.ok) throw new Error(data.error); await onCreated(kind === "customer" ? "Kunden er opprettet" : `Ordre #${data.order.orderNumber} er opprettet`); } catch (reason) { setError(reason instanceof Error ? reason.message : "Noe gikk galt."); setBusy(false); } }
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><section className="entry-modal" role="dialog" aria-modal="true"><div className="modal-head"><div><h2>{kind === "customer" ? "Opprett kunde" : "Opprett ordre"}</h2><p>{kind === "customer" ? "Legg inn det du har nå. Resten kan fylles ut senere." : "Velg kunde og gi jobben et tydelig navn."}</p></div><button className="icon-button" onClick={onClose}><X /></button></div><form onSubmit={submit}><div className="form-grid">{kind === "customer" ? <><Field label="Kundenavn" wide><input name="name" required /></Field><Field label="Organisasjonsnummer"><input name="organizationNumber" /></Field><Field label="E-post"><input name="email" type="email" /></Field><Field label="Telefon"><input name="phone" /></Field><Field label="Adresse" wide><input name="address" /></Field></> : <><Field label="Kunde" wide><select name="customerId" required defaultValue=""><option value="" disabled>Velg kunde</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></Field><Field label="Tittel" wide><input name="title" placeholder="Hva skal gjøres?" required /></Field><Field label="Arbeidsadresse" wide><input name="workAddress" /></Field><Field label="Beskrivelse" wide><textarea name="description" rows={3} /></Field></>}</div>{error && <p className="form-error">{error}</p>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Avbryt</button><button className="primary" disabled={busy}>{busy ? "Lagrer…" : kind === "customer" ? "Opprett kunde" : "Opprett ordre"}</button></div></form></section></div>;
+function CreateModal({
+  kind,
+  customers,
+  onClose,
+  onCreated,
+}: {
+  kind: Exclude<Modal, null>;
+  customers: Customer[];
+  onClose: () => void;
+  onCreated: (message: string) => void;
+}) {
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    const values = Object.fromEntries(
+      new FormData(event.currentTarget).entries(),
+    );
+    try {
+      const response = await fetch(
+        kind === "customer" ? "/api/customers" : "/api/orders",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(values),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      await onCreated(
+        kind === "customer"
+          ? "Kunden er opprettet"
+          : `Ordre #${data.order.orderNumber} er opprettet`,
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Noe gikk galt.");
+      setBusy(false);
+    }
+  }
+  return (
+    <div
+      className="modal-backdrop"
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target) onClose();
+      }}
+    >
+      <section className="entry-modal" role="dialog" aria-modal="true">
+        <div className="modal-head">
+          <div>
+            <h2>{kind === "customer" ? "Opprett kunde" : "Opprett ordre"}</h2>
+            <p>
+              {kind === "customer"
+                ? "Legg inn det du har nå. Resten kan fylles ut senere."
+                : "Velg kunde og gi jobben et tydelig navn."}
+            </p>
+          </div>
+          <button className="icon-button" onClick={onClose}>
+            <X />
+          </button>
+        </div>
+        <form onSubmit={submit}>
+          <div className="form-grid">
+            {kind === "customer" ? (
+              <>
+                <Field label="Kundenavn" wide>
+                  <input name="name" required />
+                </Field>
+                <Field label="Organisasjonsnummer">
+                  <input name="organizationNumber" />
+                </Field>
+                <Field label="E-post">
+                  <input name="email" type="email" />
+                </Field>
+                <Field label="Telefon">
+                  <input name="phone" />
+                </Field>
+                <Field label="Adresse" wide>
+                  <input name="address" />
+                </Field>
+              </>
+            ) : (
+              <>
+                <Field label="Kunde" wide>
+                  <select name="customerId" required defaultValue="">
+                    <option value="" disabled>
+                      Velg kunde
+                    </option>
+                    {customers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Tittel" wide>
+                  <input name="title" placeholder="Hva skal gjøres?" required />
+                </Field>
+                <Field label="Arbeidsadresse" wide>
+                  <input name="workAddress" />
+                </Field>
+                <Field label="Beskrivelse" wide>
+                  <textarea name="description" rows={3} />
+                </Field>
+              </>
+            )}
+          </div>
+          {error && <p className="form-error">{error}</p>}
+          <div className="modal-actions">
+            <button type="button" className="secondary" onClick={onClose}>
+              Avbryt
+            </button>
+            <button className="primary" disabled={busy}>
+              {busy
+                ? "Lagrer…"
+                : kind === "customer"
+                  ? "Opprett kunde"
+                  : "Opprett ordre"}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
 }
 
-function Field({ label, wide, children }: { label: string; wide?: boolean; children: React.ReactNode }) { return <label className={`field ${wide ? "wide" : ""}`}><span>{label}</span>{children}</label>; }
+function Field({
+  label,
+  wide,
+  children,
+}: {
+  label: string;
+  wide?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={`field ${wide ? "wide" : ""}`}>
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
