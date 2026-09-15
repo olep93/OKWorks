@@ -1,0 +1,39 @@
+import { randomUUID } from "node:crypto";
+import { and, eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/auth";
+import { db } from "@/lib/db/client";
+import { customers, invoiceLines, invoices, orderEntries, orders, organizations, timeEntries } from "@/lib/db/schema";
+
+export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
+  try {
+    const user = await requireUser(); const { id } = await context.params;
+    const [order] = await db.select().from(orders).where(and(eq(orders.id, id), eq(orders.organizationId, user.organizationId))).limit(1);
+    if (!order) return NextResponse.json({ error: "Ordren finnes ikke." }, { status: 404 });
+    const [[customer], [organization], timeRows, entryRows] = await Promise.all([
+      db.select().from(customers).where(and(eq(customers.id, order.customerId), eq(customers.organizationId, user.organizationId))).limit(1),
+      db.select().from(organizations).where(eq(organizations.id, user.organizationId)).limit(1),
+      db.select().from(timeEntries).where(and(eq(timeEntries.orderId, id), eq(timeEntries.organizationId, user.organizationId))),
+      db.select().from(orderEntries).where(and(eq(orderEntries.orderId, id), eq(orderEntries.organizationId, user.organizationId))),
+    ]);
+    if (!customer || !organization) return NextResponse.json({ error: "Kunde- eller firmainformasjon mangler." }, { status: 400 });
+    const vatRate = organization.defaultVatBasisPoints;
+    const sources = [
+      ...timeRows.map((row) => ({ sourceType: "TIME", sourceId: row.id, lineType: "TIME", description: row.description || `Arbeid ${row.workDate.toLocaleDateString("nb-NO")}`, quantityThousandths: Math.round(row.minutes / 60 * 1000), unit: "timer", unitPriceOre: row.ratePerHourOre, subtotalOre: Math.round(row.minutes / 60 * row.ratePerHourOre) })),
+      ...entryRows.filter((row) => !["IMAGE", "DOCUMENT"].includes(row.kind)).map((row) => ({ sourceType: row.kind, sourceId: row.id, lineType: row.kind, description: row.title + (row.description ? ` – ${row.description}` : ""), quantityThousandths: row.quantityThousandths ?? 1000, unit: row.unit ?? "stk", unitPriceOre: row.unitRateOre ?? row.amountOre, subtotalOre: row.amountOre })),
+    ];
+    if (!sources.length) return NextResponse.json({ error: "Registrer minst én fakturerbar post først." }, { status: 400 });
+    const prepared = sources.map((line, index) => { const vatAmountOre = Math.round(line.subtotalOre * vatRate / 10000); return { ...line, organizationId: user.organizationId, vatBasisPoints: vatRate, vatAmountOre, totalOre: line.subtotalOre + vatAmountOre, sortOrder: index }; });
+    const subtotalOre = prepared.reduce((sum, line) => sum + line.subtotalOre, 0); const vatAmountOre = prepared.reduce((sum, line) => sum + line.vatAmountOre, 0); const totalOre = subtotalOre + vatAmountOre;
+    const invoice = await db.transaction(async (tx) => {
+      let [draft] = await tx.select().from(invoices).where(and(eq(invoices.organizationId, user.organizationId), eq(invoices.sourceOrderId, id), eq(invoices.status, "DRAFT"))).limit(1);
+      const issueDate = new Date(); const dueDate = new Date(issueDate); dueDate.setDate(dueDate.getDate() + organization.defaultPaymentTermsDays);
+      if (!draft) [draft] = await tx.insert(invoices).values({ organizationId: user.organizationId, sourceOrderId: id, customerId: customer.id, status: "DRAFT", issueDate, dueDate, subtotalOre, vatAmountOre, totalOre, remainingAmountOre: totalOre, organizationSnapshot: organization, customerSnapshot: customer, bankAccountSnapshot: organization.bankAccount, idempotencyKey: randomUUID() }).returning();
+      else await tx.update(invoices).set({ issueDate, dueDate, subtotalOre, vatAmountOre, totalOre, remainingAmountOre: totalOre, organizationSnapshot: organization, customerSnapshot: customer, bankAccountSnapshot: organization.bankAccount, updatedAt: new Date() }).where(eq(invoices.id, draft.id));
+      await tx.delete(invoiceLines).where(eq(invoiceLines.invoiceId, draft.id));
+      await tx.insert(invoiceLines).values(prepared.map((line) => ({ ...line, invoiceId: draft.id })));
+      return { ...draft, issueDate, dueDate, subtotalOre, vatAmountOre, totalOre };
+    });
+    return NextResponse.json({ invoice });
+  } catch (error) { console.error(error); return NextResponse.json({ error: "Kunne ikke lage fakturautkastet." }, { status: 500 }); }
+}
