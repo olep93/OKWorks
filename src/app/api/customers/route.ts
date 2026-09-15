@@ -10,6 +10,8 @@ const inputSchema = z.object({
   email: z.union([z.email(), z.literal("")]).optional(),
   phone: z.string().trim().max(40).optional(),
   address: z.string().trim().max(500).optional(),
+  postalCode: z.string().trim().max(16).optional(),
+  city: z.string().trim().max(120).optional(),
 });
 
 export async function POST(request: Request) {
@@ -24,6 +26,8 @@ export async function POST(request: Request) {
       email: parsed.data.email || null,
       phone: parsed.data.phone || null,
       address: parsed.data.address || null,
+      postalCode: parsed.data.postalCode || null,
+      city: parsed.data.city || null,
     }).returning();
     return NextResponse.json({ customer }, { status: 201 });
   } catch {
