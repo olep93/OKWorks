@@ -487,14 +487,14 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
                   : screen === "bank"
                     ? "Bank og betaling"
                     : screen === "settings"
-                    ? "Firmaprofil"
-                    : screen === "orders"
-                      ? "Ordre"
-                      : screen === "invoices" || screen === "invoice"
-                        ? "Fakturaer"
-                        : selectedOrder
-                          ? `Ordre #${selectedOrder.orderNumber}`
-                          : "Ordre"}
+                      ? "Firmaprofil"
+                      : screen === "orders"
+                        ? "Ordre"
+                        : screen === "invoices" || screen === "invoice"
+                          ? "Fakturaer"
+                          : selectedOrder
+                            ? `Ordre #${selectedOrder.orderNumber}`
+                            : "Ordre"}
             </strong>
           </div>
         </header>
@@ -1045,20 +1045,51 @@ function OrderEntryModal({
   onSaved: () => void;
 }) {
   const [error, setError] = useState("");
-  const [route, setRoute] = useState({ origin: "", destination: "", km: "", rate: "", toll: "0", configured: false });
+  const [route, setRoute] = useState({
+    origin: "",
+    destination: "",
+    km: "",
+    rate: "",
+    toll: "0",
+    configured: false,
+  });
   const [routeBusy, setRouteBusy] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
   const financial = !["IMAGE", "DOCUMENT"].includes(kind);
   useEffect(() => {
     if (kind !== "DRIVING") return;
-    fetch(`/api/orders/${orderId}/route-estimate`, { cache: "no-store" }).then((response) => response.json()).then((value) => setRoute((current) => ({ ...current, origin: value.origin ?? "", destination: value.destination ?? "", rate: String(Number(value.mileageRateOre ?? 500) / 100), configured: Boolean(value.mapsConfigured) })));
+    fetch(`/api/orders/${orderId}/route-estimate`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((value) =>
+        setRoute((current) => ({
+          ...current,
+          origin: value.origin ?? "",
+          destination: value.destination ?? "",
+          rate: String(Number(value.mileageRateOre ?? 500) / 100),
+          configured: Boolean(value.mapsConfigured),
+        })),
+      );
   }, [kind, orderId]);
   async function calculateRoute() {
-    setRouteBusy(true); setError("");
-    const response = await fetch(`/api/orders/${orderId}/route-estimate`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ origin: route.origin, destination: route.destination, emissionType: "GASOLINE" }) });
+    setRouteBusy(true);
+    setError("");
+    const response = await fetch(`/api/orders/${orderId}/route-estimate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        origin: route.origin,
+        destination: route.destination,
+        emissionType: "GASOLINE",
+      }),
+    });
     const value = await response.json();
     if (!response.ok) setError(value.error ?? "Kunne ikke beregne ruten.");
-    else setRoute((current) => ({ ...current, km: String(value.distanceKm), toll: String(Number(value.tollOre ?? 0) / 100) }));
+    else
+      setRoute((current) => ({
+        ...current,
+        km: String(value.distanceKm),
+        toll: String(Number(value.tollOre ?? 0) / 100),
+      }));
     setRouteBusy(false);
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -1143,7 +1174,20 @@ function OrderEntryModal({
                         : "Navn"
               }
             >
-              <input name="title" defaultValue={kind === "DRIVING" ? `${route.origin} – ${route.destination}` : ""} key={kind === "DRIVING" ? `${route.origin}-${route.destination}` : kind} required />
+              <input
+                name="title"
+                defaultValue={
+                  kind === "DRIVING"
+                    ? `${route.origin} – ${route.destination}`
+                    : ""
+                }
+                key={
+                  kind === "DRIVING"
+                    ? `${route.origin}-${route.destination}`
+                    : kind
+                }
+                required
+              />
             </Field>
             {kind === "LINE" && (
               <>
@@ -1171,11 +1215,50 @@ function OrderEntryModal({
             )}
             {kind === "DRIVING" && (
               <>
-                <Field label="Fra" wide><input value={route.origin} onChange={(event) => setRoute({ ...route, origin: event.target.value })} required /></Field>
-                <Field label="Til" wide><input value={route.destination} onChange={(event) => setRoute({ ...route, destination: event.target.value })} required /></Field>
-                <div className="route-action wide"><button type="button" className="secondary" onClick={calculateRoute} disabled={routeBusy || !route.configured}>{routeBusy ? "Beregner…" : "Beregn med Google Maps"}</button><span>{route.configured ? "Rute og bompenger beregnes automatisk." : "Google Maps er ikke aktivert i denne deployen."}</span></div>
+                <Field label="Fra" wide>
+                  <input
+                    value={route.origin}
+                    onChange={(event) =>
+                      setRoute({ ...route, origin: event.target.value })
+                    }
+                    required
+                  />
+                </Field>
+                <Field label="Til" wide>
+                  <input
+                    value={route.destination}
+                    onChange={(event) =>
+                      setRoute({ ...route, destination: event.target.value })
+                    }
+                    required
+                  />
+                </Field>
+                <div className="route-action wide">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={calculateRoute}
+                    disabled={routeBusy || !route.configured}
+                  >
+                    {routeBusy ? "Beregner…" : "Beregn med Google Maps"}
+                  </button>
+                  <span>
+                    {route.configured
+                      ? "Rute og bompenger beregnes automatisk."
+                      : "Google Maps er ikke aktivert i denne deployen."}
+                  </span>
+                </div>
                 <Field label="Kilometer">
-                  <input name="quantity" type="number" step="0.1" value={route.km} onChange={(event) => setRoute({ ...route, km: event.target.value })} required />
+                  <input
+                    name="quantity"
+                    type="number"
+                    step="0.1"
+                    value={route.km}
+                    onChange={(event) =>
+                      setRoute({ ...route, km: event.target.value })
+                    }
+                    required
+                  />
                 </Field>
                 <Field label="Kr per km">
                   <input
@@ -1183,11 +1266,24 @@ function OrderEntryModal({
                     type="number"
                     step="0.01"
                     value={route.rate}
-                    onChange={(event) => setRoute({ ...route, rate: event.target.value })}
+                    onChange={(event) =>
+                      setRoute({ ...route, rate: event.target.value })
+                    }
                     required
                   />
                 </Field>
-                <Field label="Bompenger (kr)"><input name="tollOre" type="number" min="0" step="0.01" value={route.toll} onChange={(event) => setRoute({ ...route, toll: event.target.value })} /></Field>
+                <Field label="Bompenger (kr)">
+                  <input
+                    name="tollOre"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={route.toll}
+                    onChange={(event) =>
+                      setRoute({ ...route, toll: event.target.value })
+                    }
+                  />
+                </Field>
                 <input type="hidden" name="unit" value="km" />
               </>
             )}
@@ -1578,12 +1674,18 @@ function InvoiceScreen({
             <Download />
             Last ned PDF
           </a>
-          {finalized && invoice.status !== "PAID" && invoice.status !== "VOID" && (
-            <button className="primary" onClick={registerPayment} disabled={busy}>
-              <CheckCircle2 />
-              Registrer betaling
-            </button>
-          )}
+          {finalized &&
+            invoice.status !== "PAID" &&
+            invoice.status !== "VOID" && (
+              <button
+                className="primary"
+                onClick={registerPayment}
+                disabled={busy}
+              >
+                <CheckCircle2 />
+                Registrer betaling
+              </button>
+            )}
         </div>
       </div>
       <div className="invoice-layout">
@@ -1771,15 +1873,181 @@ function InvoiceScreen({
 }
 
 function BankScreen() {
-  type BankData = { configured: boolean; provider: string; mode: string; connections: Array<{ id: string; status: string; account_number_masked: string | null; consent_expires_at: string | null; last_synced_at: string | null }> };
+  type BankData = {
+    configured: boolean;
+    provider: string;
+    mode: string;
+    connections: Array<{
+      id: string;
+      status: string;
+      account_number_masked: string | null;
+      consent_expires_at: string | null;
+      last_synced_at: string | null;
+    }>;
+  };
   const [data, setData] = useState<BankData | null>(null);
   const [banks, setBanks] = useState<Array<{ id: string; name: string }>>([]);
-  const [bankId, setBankId] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  useEffect(() => { fetch("/api/bank", { cache: "no-store" }).then((response) => response.json()).then((value) => { setData(value); if (value.configured) fetch("/api/bank/banks", { cache: "no-store" }).then((response) => response.json()).then((result) => { setBanks(result.banks ?? []); if (result.banks?.[0]) setBankId(result.banks[0].id); if (result.error) setError(result.error); }); }); }, []);
-  async function connect() { setBusy(true); setError(""); const response = await fetch("/api/bank/connect", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ bankId }) }); const value = await response.json(); if (!response.ok) { setError(value.error ?? "Kunne ikke starte banktilkoblingen."); setBusy(false); return; } window.location.assign(value.consentUrl); }
-  if (!data) return <section className="panel empty-state"><p>Laster bankstatus…</p></section>;
-  const active = data.connections.find((connection) => connection.status === "CONNECTED");
-  return <><div className="page-heading"><div><p className="eyebrow">Betalingsavstemming</p><h1>Bank og betaling</h1><p className="subhead">Koble firmakontoen for automatisk matching av KID og innbetalinger.</p></div></div><section className="panel bank-card"><div className="bank-hero"><div className="empty-icon"><Banknote /></div><div><h2>{active ? "Bankkonto tilkoblet" : "Koble til firmakonto"}</h2><p>{active ? `Konto ${active.account_number_masked ?? ""} er klar for avstemming.` : "OK Works bruker en sikker PSD2-leverandør. BankID gjennomføres hos banken; vi lagrer aldri BankID-passord eller koder."}</p></div><span className={`bank-state ${active ? "connected" : ""}`}>{active ? "Tilkoblet" : data.configured ? "Klar for sandbox" : "Venter på tilgang"}</span></div><div className="bank-details"><div><span>Leverandør</span><b>{data.provider}</b></div><div><span>Miljø</span><b>{data.mode === "production" ? "Produksjon" : "Sandbox"}</b></div><div><span>Automatisk KID-match</span><b>{active ? "Aktiv" : "Aktiveres etter tilkobling"}</b></div></div>{!data.configured && <div className="bank-notice"><AlertTriangle /><div><b>Leverandørtilgang mangler</b><span>Neonomics klient-ID, klienthemmelighet og krypteringsnøkkel må legges inn før BankID-/samtykkeflyten kan startes.</span></div></div>}{data.configured && !active && <div className="bank-picker"><label><span>Velg bank</span><select value={bankId} onChange={(event) => setBankId(event.target.value)} disabled={busy}><option value="">Velg bank</option>{banks.map((bank) => <option value={bank.id} key={bank.id}>{bank.name}</option>)}</select></label><p>Du sendes videre til bankens egen sikre side for samtykke og eventuell BankID.</p></div>}{error && <p className="form-error">{error}</p>}<div className="bank-actions"><button className="primary" onClick={connect} disabled={!data.configured || Boolean(active) || !bankId || busy}><Banknote />{active ? "Banken er koblet til" : busy ? "Starter banktilkobling…" : "Koble til bank med BankID"}</button></div></section></>;
+  const [bankId, setBankId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState("");
+  useEffect(() => {
+    fetch("/api/bank", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((value) => {
+        setData(value);
+        if (value.configured)
+          fetch("/api/bank/banks", { cache: "no-store" })
+            .then((response) => response.json())
+            .then((result) => {
+              setBanks(result.banks ?? []);
+              if (result.banks?.[0]) setBankId(result.banks[0].id);
+              if (result.error) setError(result.error);
+            });
+      });
+  }, []);
+  async function connect() {
+    setBusy(true);
+    setError("");
+    const response = await fetch("/api/bank/connect", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ bankId }),
+    });
+    const value = await response.json();
+    if (!response.ok) {
+      setError(value.error ?? "Kunne ikke starte banktilkoblingen.");
+      setBusy(false);
+      return;
+    }
+    window.location.assign(value.consentUrl);
+  }
+  async function sync() {
+    setBusy(true);
+    setError("");
+    setResult("");
+    const response = await fetch("/api/bank/sync", { method: "POST" });
+    const value = await response.json();
+    if (!response.ok)
+      setError(value.error ?? "Kunne ikke synkronisere banken.");
+    else
+      setResult(
+        `${value.imported} nye transaksjoner hentet, ${value.matched} matchet mot faktura.`,
+      );
+    setBusy(false);
+  }
+  if (!data)
+    return (
+      <section className="panel empty-state">
+        <p>Laster bankstatus…</p>
+      </section>
+    );
+  const active = data.connections.find(
+    (connection) => connection.status === "CONNECTED",
+  );
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Betalingsavstemming</p>
+          <h1>Bank og betaling</h1>
+          <p className="subhead">
+            Koble firmakontoen for automatisk matching av KID og innbetalinger.
+          </p>
+        </div>
+      </div>
+      <section className="panel bank-card">
+        <div className="bank-hero">
+          <div className="empty-icon">
+            <Banknote />
+          </div>
+          <div>
+            <h2>{active ? "Bankkonto tilkoblet" : "Koble til firmakonto"}</h2>
+            <p>
+              {active
+                ? `Konto ${active.account_number_masked ?? ""} er klar for avstemming.`
+                : "OK Works bruker en sikker PSD2-leverandør. BankID gjennomføres hos banken; vi lagrer aldri BankID-passord eller koder."}
+            </p>
+          </div>
+          <span className={`bank-state ${active ? "connected" : ""}`}>
+            {active
+              ? "Tilkoblet"
+              : data.configured
+                ? "Klar for sandbox"
+                : "Venter på tilgang"}
+          </span>
+        </div>
+        <div className="bank-details">
+          <div>
+            <span>Leverandør</span>
+            <b>{data.provider}</b>
+          </div>
+          <div>
+            <span>Miljø</span>
+            <b>{data.mode === "production" ? "Produksjon" : "Sandbox"}</b>
+          </div>
+          <div>
+            <span>Automatisk KID-match</span>
+            <b>{active ? "Aktiv" : "Aktiveres etter tilkobling"}</b>
+          </div>
+        </div>
+        {!data.configured && (
+          <div className="bank-notice">
+            <AlertTriangle />
+            <div>
+              <b>Leverandørtilgang mangler</b>
+              <span>
+                Neonomics klient-ID, klienthemmelighet og krypteringsnøkkel må
+                legges inn før BankID-/samtykkeflyten kan startes.
+              </span>
+            </div>
+          </div>
+        )}
+        {data.configured && !active && (
+          <div className="bank-picker">
+            <label>
+              <span>Velg bank</span>
+              <select
+                value={bankId}
+                onChange={(event) => setBankId(event.target.value)}
+                disabled={busy}
+              >
+                <option value="">Velg bank</option>
+                {banks.map((bank) => (
+                  <option value={bank.id} key={bank.id}>
+                    {bank.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p>
+              Du sendes videre til bankens egen sikre side for samtykke og
+              eventuell BankID.
+            </p>
+          </div>
+        )}
+        {error && <p className="form-error">{error}</p>}
+        {result && <p className="bank-result">{result}</p>}
+        <div className="bank-actions">
+          {active ? (
+            <button className="primary" onClick={sync} disabled={busy}>
+              <Banknote />
+              {busy ? "Synkroniserer…" : "Hent nye innbetalinger"}
+            </button>
+          ) : (
+            <button
+              className="primary"
+              onClick={connect}
+              disabled={!data.configured || !bankId || busy}
+            >
+              <Banknote />
+              {busy ? "Starter banktilkobling…" : "Koble til bank med BankID"}
+            </button>
+          )}
+        </div>
+      </section>
+    </>
+  );
 }
 
 function SettingsScreen({ onSaved }: { onSaved: (message: string) => void }) {
