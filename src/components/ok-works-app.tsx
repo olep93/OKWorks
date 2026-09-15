@@ -3,12 +3,13 @@
 import {
   AlertTriangle, ArrowLeft, Bell, Building2, CalendarDays, Camera,
   Check, CheckCircle2, ChevronRight, CircleDollarSign, ClipboardList,
-  Clock3, FileText, Gauge, ImagePlus, LayoutDashboard, Menu, MoreHorizontal,
-  Package, Plus, Receipt, Search, Settings, Users, WalletCards, X,
+  Clock3, Download, FileText, Gauge, ImagePlus, LayoutDashboard, Menu,
+  MoreHorizontal, Package, Plus, Receipt, Search, Send, Settings,
+  ShieldCheck, Users, WalletCards, X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-type Screen = "dashboard" | "order";
+type Screen = "dashboard" | "order" | "invoice";
 
 const orders = [
   { id: "2048", title: "Utskifting av kabel og armatur", customer: "Hansen Bygg AS", place: "Røyken → Oslo", amount: "18 420 kr", status: "Pågår", tone: "progress" },
@@ -38,6 +39,7 @@ export function OkWorksApp() {
 
   const notify = (message: string) => setToast(message);
   const openOrder = () => { setScreen("order"); setMenuOpen(false); window.scrollTo({ top: 0 }); };
+  const openInvoice = () => { setScreen("invoice"); setMenuOpen(false); window.scrollTo({ top: 0 }); };
   const goDashboard = () => { setScreen("dashboard"); setMenuOpen(false); window.scrollTo({ top: 0 }); };
 
   return (
@@ -48,7 +50,7 @@ export function OkWorksApp() {
           <button className={`nav-button ${screen === "dashboard" ? "active" : ""}`} onClick={goDashboard}><LayoutDashboard />Dashboard</button>
           <button className={`nav-button ${screen === "order" ? "active" : ""}`} onClick={openOrder}><ClipboardList />Ordre</button>
           <button className="nav-button" onClick={() => notify("Kundearkivet kommer i neste leveranse")}><Users />Kunder</button>
-          <button className="nav-button" onClick={() => notify("Fakturaarkivet klargjøres")}><FileText />Fakturaer</button>
+          <button className={`nav-button ${screen === "invoice" ? "active" : ""}`} onClick={openInvoice}><FileText />Fakturaer</button>
           <button className="nav-button" onClick={() => notify("Produktregisteret klargjøres")}><Package />Produkter & tjenester</button>
           <button className="nav-button" onClick={() => notify("Firmainnstillinger kommer snart")}><Settings />Innstillinger</button>
         </nav>
@@ -61,10 +63,14 @@ export function OkWorksApp() {
       <main className="main">
         <header className="topbar">
           <button className="icon-button mobile-menu" aria-label={menuOpen ? "Lukk meny" : "Åpne meny"} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
-          <div className="crumb">OK Works&nbsp;&nbsp;/&nbsp;&nbsp;<strong>{screen === "dashboard" ? "Dashboard" : "Ordre #2048"}</strong></div>
+          <div className="crumb">OK Works&nbsp;&nbsp;/&nbsp;&nbsp;<strong>{screen === "dashboard" ? "Dashboard" : screen === "order" ? "Ordre #2048" : "Fakturautkast"}</strong></div>
           <div className="top-actions"><button className="icon-button" aria-label="Søk" onClick={() => notify("Søk åpnes snart")}><Search /></button><button className="icon-button" aria-label="Varsler" onClick={() => notify("Ingen nye varsler")}><Bell /></button></div>
         </header>
-        <div className="content">{screen === "dashboard" ? <Dashboard openOrder={openOrder} notify={notify} /> : <OrderView goBack={goDashboard} notify={notify} />}</div>
+        <div className="content">
+          {screen === "dashboard" && <Dashboard openOrder={openOrder} notify={notify} />}
+          {screen === "order" && <OrderView goBack={goDashboard} openInvoice={openInvoice} notify={notify} />}
+          {screen === "invoice" && <InvoiceView openOrder={openOrder} notify={notify} />}
+        </div>
       </main>
       {toast && <div className="save-toast" role="status"><Check />{toast}</div>}
     </div>
@@ -90,7 +96,7 @@ function Dashboard({ openOrder, notify }: { openOrder: () => void; notify: (mess
   </>;
 }
 
-function OrderView({ goBack, notify }: { goBack: () => void; notify: (message: string) => void }) {
+function OrderView({ goBack, openInvoice, notify }: { goBack: () => void; openInvoice: () => void; notify: (message: string) => void }) {
   return <div className="order-view">
     <section className="order-hero"><button className="back-button" onClick={goBack}><ArrowLeft />Tilbake til dashboard</button><div className="order-hero-main"><div><p className="eyebrow">Ordre #2048 · Pågår</p><h1>Utskifting av kabel og armatur</h1><div className="order-meta"><span><Building2 />Hansen Bygg AS</span><span><CalendarDays />13.–15. september</span><span>Røyken → Oslo</span></div></div><div className="order-amount"><span>Registrert fakturerbart</span><strong>18 420 kr</strong></div></div></section>
     <div className="quick-actions">
@@ -104,7 +110,30 @@ function OrderView({ goBack, notify }: { goBack: () => void; notify: (message: s
     </div>
     <div className="order-columns">
       <section className="panel"><div className="panel-head"><div><h2>Jobbaktivitet</h2><p>Alt som er registrert på ordren</p></div><button className="secondary" onClick={() => notify("Arbeidsnotat lagret")}><Plus />Legg til</button></div><div className="timeline"><div className="timeline-day">Mandag 13. september</div>{events.slice(0,3).map((event, i) => <Event key={i} {...event} />)}<div className="timeline-day">Tirsdag 14. september</div>{events.slice(3).map((event, i) => <Event key={i} {...event} />)}</div></section>
-      <section className="panel"><div className="panel-head"><div><h2>Ferdigstill jobb</h2><p>Kontroller før fakturering</p></div></div><div className="preflight"><div className="check-summary"><div className="check-summary-icon"><CheckCircle2 /></div><div><b>Jobben er nesten klar</b><span>6 kontroller bestått · 1 advarsel</span></div></div><div className="check-list"><CheckLine text="5,5 timer registrert" /><CheckLine text="Materialer og kjøring registrert" /><CheckLine text="Før- og etter-bilder finnes" /><CheckLine text="Dokumentasjon er knyttet til ordren" /><CheckLine text="Arbeidsbeskrivelsen er kort" warning /></div><button className="primary highlight full" onClick={() => notify("Preflight fullført – fakturautkast er klart")}><CheckCircle2 />Kjør ferdigstillingskontroll</button></div></section>
+      <section className="panel"><div className="panel-head"><div><h2>Ferdigstill jobb</h2><p>Kontroller før fakturering</p></div></div><div className="preflight"><div className="check-summary"><div className="check-summary-icon"><CheckCircle2 /></div><div><b>Jobben er nesten klar</b><span>6 kontroller bestått · 1 advarsel</span></div></div><div className="check-list"><CheckLine text="5,5 timer registrert" /><CheckLine text="Materialer og kjøring registrert" /><CheckLine text="Før- og etter-bilder finnes" /><CheckLine text="Dokumentasjon er knyttet til ordren" /><CheckLine text="Arbeidsbeskrivelsen er kort" warning /></div><button className="primary highlight full" onClick={openInvoice}><CheckCircle2 />Kjør ferdigstillingskontroll</button></div></section>
+    </div>
+  </div>;
+}
+
+function InvoiceView({ openOrder, notify }: { openOrder: () => void; notify: (message: string) => void }) {
+  const lines = [
+    ["Arbeidstime", "5,5 timer", "790 kr", "4 345 kr"],
+    ["Kabel 3G2,5 mm²", "14 m", "29 kr", "406 kr"],
+    ["Armatur 40W", "1 stk", "449 kr", "449 kr"],
+    ["Kjøring Røyken–Oslo t/r", "92,6 km", "6,50 kr", "602 kr"],
+    ["Hotell inkl. 10 % påslag", "1 natt", "1 639 kr", "1 639 kr"],
+  ];
+  return <div className="invoice-view">
+    <div className="invoice-top"><div><button className="back-button dark" onClick={openOrder}><ArrowLeft />Tilbake til ordre #2048</button><p className="eyebrow">Fakturautkast</p><h1>Klar for siste kontroll</h1><p className="subhead">Utkastet er ikke låst eller sendt ennå.</p></div><div className="invoice-actions"><button className="secondary" onClick={() => notify("PDF-forhåndsvisning klargjøres")}><Download />Forhåndsvis PDF</button><button className="primary" onClick={() => notify("Demo: Fakturaen er kontrollert, men ikke sendt")}><Send />Finaliser og send</button></div></div>
+    <div className="invoice-layout">
+      <section className="invoice-paper">
+        <div className="invoice-paper-head"><div className="invoice-logo"><span>OK</span><b>Verkly Demo AS</b></div><div className="invoice-title"><span>FAKTURAUTKAST</span><strong># Neste nummer</strong></div></div>
+        <div className="invoice-parties"><div><small>FAKTURERES TIL</small><b>Hansen Bygg AS</b><span>Industriveien 12<br/>3470 Slemmestad<br/>Org.nr. 923 456 789</span></div><div className="invoice-dates"><p><span>Ordre</span><b>#2048</b></p><p><span>Fakturadato</span><b>15.09.2026</b></p><p><span>Forfall</span><b>29.09.2026</b></p></div></div>
+        <div className="invoice-table"><div className="invoice-table-row head"><span>Beskrivelse</span><span>Antall</span><span>Pris</span><span>Beløp</span></div>{lines.map((line) => <div className="invoice-table-row" key={line[0]}>{line.map((cell) => <span key={cell}>{cell}</span>)}</div>)}</div>
+        <div className="invoice-totals"><p><span>Netto</span><b>14 736 kr</b></p><p><span>MVA 25 %</span><b>3 684 kr</b></p><p className="grand-total"><span>Å betale</span><b>18 420 kr</b></p></div>
+        <div className="invoice-footer"><span>Bankkonto 1503.44.56789</span><span>Betalingsfrist 14 dager</span></div>
+      </section>
+      <aside className="invoice-checks panel"><div className="panel-head"><div><h2>Siste kontroll</h2><p>Grunnlaget er snapshot-klart</p></div></div><div className="invoice-check-body"><div className="secure-note"><ShieldCheck /><div><b>Trygg finalisering</b><span>Fakturanummer tildeles atomisk. Beløp og kundeinformasjon låses når du finaliserer.</span></div></div><div className="check-list"><CheckLine text="Alle valgte poster er ufakturerte" /><CheckLine text="Kundeinformasjon er komplett" /><CheckLine text="MVA og summer er beregnet" /><CheckLine text="Dokumentasjonsrapport kan vedlegges" /><CheckLine text="Arbeidsbeskrivelsen er kort" warning /></div><label className="confirm-row"><input type="checkbox" defaultChecked /><span>Jeg har kontrollert fakturagrunnlaget</span></label></div></aside>
     </div>
   </div>;
 }
