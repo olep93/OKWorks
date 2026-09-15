@@ -10,6 +10,8 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     const user = await requireUser(); const { id } = await context.params;
     const [order] = await db.select().from(orders).where(and(eq(orders.id, id), eq(orders.organizationId, user.organizationId))).limit(1);
     if (!order) return NextResponse.json({ error: "Ordren finnes ikke." }, { status: 404 });
+    const [existingInvoice] = await db.select().from(invoices).where(and(eq(invoices.organizationId, user.organizationId), eq(invoices.sourceOrderId, id))).limit(1);
+    if (existingInvoice && existingInvoice.status !== "DRAFT") return NextResponse.json({ error: `Ordren er allerede fakturert på faktura #${existingInvoice.invoiceNumber}.`, invoiceId: existingInvoice.id }, { status: 409 });
     const [[customer], [organization], timeRows, entryRows] = await Promise.all([
       db.select().from(customers).where(and(eq(customers.id, order.customerId), eq(customers.organizationId, user.organizationId))).limit(1),
       db.select().from(organizations).where(eq(organizations.id, user.organizationId)).limit(1),
@@ -26,7 +28,7 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     const prepared = sources.map((line, index) => { const vatAmountOre = Math.round(line.subtotalOre * vatRate / 10000); return { ...line, organizationId: user.organizationId, vatBasisPoints: vatRate, vatAmountOre, totalOre: line.subtotalOre + vatAmountOre, sortOrder: index }; });
     const subtotalOre = prepared.reduce((sum, line) => sum + line.subtotalOre, 0); const vatAmountOre = prepared.reduce((sum, line) => sum + line.vatAmountOre, 0); const totalOre = subtotalOre + vatAmountOre;
     const invoice = await db.transaction(async (tx) => {
-      let [draft] = await tx.select().from(invoices).where(and(eq(invoices.organizationId, user.organizationId), eq(invoices.sourceOrderId, id), eq(invoices.status, "DRAFT"))).limit(1);
+      let draft = existingInvoice;
       const issueDate = new Date(); const dueDate = new Date(issueDate); dueDate.setDate(dueDate.getDate() + organization.defaultPaymentTermsDays);
       if (!draft) [draft] = await tx.insert(invoices).values({ organizationId: user.organizationId, sourceOrderId: id, customerId: customer.id, status: "DRAFT", issueDate, dueDate, subtotalOre, vatAmountOre, totalOre, remainingAmountOre: totalOre, organizationSnapshot: organization, customerSnapshot: customer, bankAccountSnapshot: organization.bankAccount, idempotencyKey: randomUUID() }).returning();
       else await tx.update(invoices).set({ issueDate, dueDate, subtotalOre, vatAmountOre, totalOre, remainingAmountOre: totalOre, organizationSnapshot: organization, customerSnapshot: customer, bankAccountSnapshot: organization.bankAccount, updatedAt: new Date() }).where(eq(invoices.id, draft.id));

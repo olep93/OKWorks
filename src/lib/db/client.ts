@@ -10,3 +10,4 @@ const connectionString = process.env.DATABASE_URL ?? "postgresql://build:build@1
 const client = postgres(connectionString, { prepare: false, max: 5 });
 
 export const db = drizzle(client, { schema });
+export const sqlClient = client;
