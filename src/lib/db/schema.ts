@@ -180,6 +180,25 @@ export const timeEntries = pgTable("time_entries", {
   ...timestamps,
 }, (table) => [index("time_entries_org_order_idx").on(table.organizationId, table.orderId), index("time_entries_unbilled_idx").on(table.organizationId, table.orderId, table.billingStatus)]);
 
+export const orderEntries = pgTable("order_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  kind: varchar("kind", { length: 30 }).notNull(),
+  workDate: timestamp("work_date", { withTimezone: true }).notNull(),
+  title: varchar("title", { length: 240 }).notNull(),
+  description: text("description"),
+  quantityThousandths: integer("quantity_thousandths"),
+  unit: varchar("unit", { length: 30 }),
+  unitRateOre: bigint("unit_rate_ore", { mode: "number" }),
+  amountOre: bigint("amount_ore", { mode: "number" }).notNull().default(0),
+  fileName: varchar("file_name", { length: 300 }),
+  metadata: jsonb("metadata"),
+  billingStatus: billingStatusEnum("billing_status").notNull().default("UNBILLED"),
+  ...timestamps,
+}, (table) => [index("order_entries_org_order_idx").on(table.organizationId, table.orderId, table.workDate)]);
+
 export const attachments = pgTable("attachments", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),

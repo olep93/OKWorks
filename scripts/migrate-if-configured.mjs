@@ -7,23 +7,25 @@ if (!process.env.DATABASE_URL) {
 }
 
 const sql = postgres(process.env.DATABASE_URL, { prepare: false, max: 1 });
-const migrationName = "0000_initial_portal";
+const migrations = ["0000_initial_portal", "0001_order_entries"];
 
 try {
   await sql`CREATE TABLE IF NOT EXISTS okworks_migrations (
     name text PRIMARY KEY,
     applied_at timestamptz NOT NULL DEFAULT now()
   )`;
-  const applied = await sql`SELECT name FROM okworks_migrations WHERE name = ${migrationName}`;
-  if (!applied.length) {
-    const migration = await readFile(new URL("../drizzle/0000_initial_portal.sql", import.meta.url), "utf8");
-    await sql.begin(async (transaction) => {
-      await transaction.unsafe(migration);
-      await transaction`INSERT INTO okworks_migrations (name) VALUES (${migrationName})`;
-    });
-    console.log(`Applied database migration ${migrationName}.`);
-  } else {
-    console.log(`Database migration ${migrationName} is already applied.`);
+  for (const migrationName of migrations) {
+    const applied = await sql`SELECT name FROM okworks_migrations WHERE name = ${migrationName}`;
+    if (!applied.length) {
+      const migration = await readFile(new URL(`../drizzle/${migrationName}.sql`, import.meta.url), "utf8");
+      await sql.begin(async (transaction) => {
+        await transaction.unsafe(migration);
+        await transaction`INSERT INTO okworks_migrations (name) VALUES (${migrationName})`;
+      });
+      console.log(`Applied database migration ${migrationName}.`);
+    } else {
+      console.log(`Database migration ${migrationName} is already applied.`);
+    }
   }
 } finally {
   await sql.end();
