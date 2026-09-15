@@ -259,6 +259,7 @@ h1 { font-size: clamp(28px, 3vw, 38px); line-height: 1.1; letter-spacing: -1.2px
 .archive-tools { display: grid; grid-template-columns: minmax(220px, 1fr) 210px; gap: 10px; margin: -8px 0 18px; }
 .archive-tools input, .archive-tools select { min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; }
 .archive-tools input:focus, .archive-tools select:focus { outline: 3px solid rgba(36,93,73,.1); border-color: var(--forest-2); }
+.route-action { display: flex; align-items: center; gap: 12px; }.route-action.wide { grid-column: 1 / -1; }.route-action span { color: var(--muted); font-size: 11px; }
 .form-error { margin: 0; padding: 10px 12px; border-radius: 9px; color: #9b2c2c; background: #fff1f1; font-size: 13px; }
 .text-button { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-weight: 700; }
 .heading-actions { display: flex; gap: 10px; flex-wrap: wrap; }

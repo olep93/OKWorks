@@ -1032,8 +1032,22 @@ function OrderEntryModal({
   onSaved: () => void;
 }) {
   const [error, setError] = useState("");
+  const [route, setRoute] = useState({ origin: "", destination: "", km: "", rate: "", toll: "0", configured: false });
+  const [routeBusy, setRouteBusy] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
   const financial = !["IMAGE", "DOCUMENT"].includes(kind);
+  useEffect(() => {
+    if (kind !== "DRIVING") return;
+    fetch(`/api/orders/${orderId}/route-estimate`, { cache: "no-store" }).then((response) => response.json()).then((value) => setRoute((current) => ({ ...current, origin: value.origin ?? "", destination: value.destination ?? "", rate: String(Number(value.mileageRateOre ?? 500) / 100), configured: Boolean(value.mapsConfigured) })));
+  }, [kind, orderId]);
+  async function calculateRoute() {
+    setRouteBusy(true); setError("");
+    const response = await fetch(`/api/orders/${orderId}/route-estimate`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ origin: route.origin, destination: route.destination, emissionType: "GASOLINE" }) });
+    const value = await response.json();
+    if (!response.ok) setError(value.error ?? "Kunne ikke beregne ruten.");
+    else setRoute((current) => ({ ...current, km: String(value.distanceKm), toll: String(Number(value.tollOre ?? 0) / 100) }));
+    setRouteBusy(false);
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -1042,7 +1056,7 @@ function OrderEntryModal({
     const headers: HeadersInit = {};
     if (financial) {
       const raw: Record<string, unknown> = Object.fromEntries(form.entries());
-      for (const key of ["unitRateOre", "costOre"])
+      for (const key of ["unitRateOre", "costOre", "tollOre"])
         if (raw[key]) raw[key] = Math.round(Number(raw[key]) * 100);
       if (raw.markupBasisPoints)
         raw.markupBasisPoints = Math.round(Number(raw.markupBasisPoints) * 100);
@@ -1116,7 +1130,7 @@ function OrderEntryModal({
                         : "Navn"
               }
             >
-              <input name="title" required />
+              <input name="title" defaultValue={kind === "DRIVING" ? `${route.origin} – ${route.destination}` : ""} key={kind === "DRIVING" ? `${route.origin}-${route.destination}` : kind} required />
             </Field>
             {kind === "LINE" && (
               <>
@@ -1144,17 +1158,23 @@ function OrderEntryModal({
             )}
             {kind === "DRIVING" && (
               <>
+                <Field label="Fra" wide><input value={route.origin} onChange={(event) => setRoute({ ...route, origin: event.target.value })} required /></Field>
+                <Field label="Til" wide><input value={route.destination} onChange={(event) => setRoute({ ...route, destination: event.target.value })} required /></Field>
+                <div className="route-action wide"><button type="button" className="secondary" onClick={calculateRoute} disabled={routeBusy || !route.configured}>{routeBusy ? "Beregner…" : "Beregn med Google Maps"}</button><span>{route.configured ? "Rute og bompenger beregnes automatisk." : "Google Maps er ikke aktivert i denne deployen."}</span></div>
                 <Field label="Kilometer">
-                  <input name="quantity" type="number" step="0.1" required />
+                  <input name="quantity" type="number" step="0.1" value={route.km} onChange={(event) => setRoute({ ...route, km: event.target.value })} required />
                 </Field>
                 <Field label="Kr per km">
                   <input
                     name="unitRateOre"
                     type="number"
                     step="0.01"
+                    value={route.rate}
+                    onChange={(event) => setRoute({ ...route, rate: event.target.value })}
                     required
                   />
                 </Field>
+                <Field label="Bompenger (kr)"><input name="tollOre" type="number" min="0" step="0.01" value={route.toll} onChange={(event) => setRoute({ ...route, toll: event.target.value })} /></Field>
                 <input type="hidden" name="unit" value="km" />
               </>
             )}
