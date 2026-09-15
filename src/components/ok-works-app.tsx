@@ -53,7 +53,11 @@ type Order = {
   customerId: string;
   updatedAt: string;
 };
-type AppData = { customers: Customer[]; orders: Order[] };
+type AppData = {
+  customers: Customer[];
+  orders: Order[];
+  onboarding?: { complete: boolean; completed: number; total: number };
+};
 type ProfileData = {
   organization: Record<string, string | number | null>;
   settings: Record<string, number>;
@@ -97,6 +101,16 @@ type ExtraEntry = {
   mimeType?: string | null;
   fileSize?: number | null;
 };
+const orderStatusLabel = (status: string) =>
+  status === "INVOICED"
+    ? "Fakturert · ubetalt"
+    : status === "CLOSED"
+      ? "Betalt"
+      : status === "CANCELLED"
+        ? "Kansellert"
+        : "Åpen";
+const orderStatusClass = (status: string) =>
+  status === "INVOICED" ? "ready" : status === "CLOSED" ? "progress" : "open";
 
 async function compressImage(file: File) {
   if (!file.type.startsWith("image/") || file.size < 700_000) return file;
@@ -361,7 +375,14 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
         onLogout();
         return;
       }
-      setData(await response.json());
+      const value = await response.json();
+      setData(value);
+      if (
+        !value.onboarding?.complete &&
+        !value.customers?.length &&
+        !value.orders?.length
+      )
+        setScreen("settings");
       setLoading(false);
     });
   }, [onLogout]);
@@ -506,7 +527,13 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
           ) : screen === "bank" ? (
             <BankScreen />
           ) : screen === "settings" ? (
-            <SettingsScreen onSaved={setToast} />
+            <SettingsScreen
+              onSaved={(message) => {
+                setToast(message);
+                void refresh();
+              }}
+              onboarding={data.onboarding}
+            />
           ) : screen === "invoices" ? (
             <InvoicesScreen onOpen={openInvoice} />
           ) : screen === "invoice" && selectedInvoiceId ? (
@@ -654,7 +681,9 @@ function Dashboard({
                   {order.workAddress || "Ingen arbeidsadresse"}
                 </div>
                 <div>
-                  <span className="status open">Åpen</span>
+                  <span className={`status ${orderStatusClass(order.status)}`}>
+                    {orderStatusLabel(order.status)}
+                  </span>
                 </div>
                 <ChevronRight />
               </button>
@@ -781,7 +810,9 @@ function Orders({
                   {order.workAddress || "Ingen arbeidsadresse"}
                 </div>
                 <div>
-                  <span className="status open">Åpen</span>
+                  <span className={`status ${orderStatusClass(order.status)}`}>
+                    {orderStatusLabel(order.status)}
+                  </span>
                 </div>
                 <ChevronRight />
               </button>
@@ -1584,6 +1615,7 @@ function InvoiceScreen({
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [showSend, setShowSend] = useState(false);
   async function load() {
     const [invoiceResponse, checkResponse] = await Promise.all([
       fetch(`/api/invoices/${invoiceId}`, { cache: "no-store" }),
@@ -1648,6 +1680,26 @@ function InvoiceScreen({
     else await load();
     setBusy(false);
   }
+  async function sendInvoice(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    const values = Object.fromEntries(
+      new FormData(event.currentTarget).entries(),
+    );
+    const response = await fetch(`/api/invoices/${invoiceId}/send`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(values),
+    });
+    const value = await response.json();
+    if (!response.ok) setError(value.error ?? "Kunne ikke sende fakturaen.");
+    else {
+      setShowSend(false);
+      await load();
+    }
+    setBusy(false);
+  }
   return (
     <div className="invoice-view">
       <div className="invoice-top">
@@ -1674,6 +1726,18 @@ function InvoiceScreen({
             <Download />
             Last ned PDF
           </a>
+          {finalized &&
+            invoice.status !== "PAID" &&
+            invoice.status !== "VOID" && (
+              <button
+                className="secondary"
+                onClick={() => setShowSend(!showSend)}
+                disabled={busy}
+              >
+                <FileText />
+                Send faktura
+              </button>
+            )}
           {finalized &&
             invoice.status !== "PAID" &&
             invoice.status !== "VOID" && (
@@ -1803,13 +1867,48 @@ function InvoiceScreen({
           </div>
           <div className="invoice-check-body">
             {finalized ? (
-              <div className="secure-note">
-                <LockKeyhole />
-                <div>
-                  <b>Faktura #{String(invoice.invoiceNumber)} er finalisert</b>
-                  <span>Registreringene og fakturanummeret er låst.</span>
+              <>
+                <div className="secure-note">
+                  <LockKeyhole />
+                  <div>
+                    <b>
+                      Faktura #{String(invoice.invoiceNumber)} er finalisert
+                    </b>
+                    <span>Registreringene og fakturanummeret er låst.</span>
+                  </div>
                 </div>
-              </div>
+                {showSend && (
+                  <form className="send-form" onSubmit={sendInvoice}>
+                    <Field label="Mottaker">
+                      <input
+                        name="recipient"
+                        type="email"
+                        defaultValue={String(customer.email ?? "")}
+                        required
+                      />
+                    </Field>
+                    <Field label="Emne">
+                      <input
+                        name="subject"
+                        defaultValue={`Faktura ${String(invoice.invoiceNumber)} fra ${String(company.name ?? "firma")}`}
+                        required
+                      />
+                    </Field>
+                    <Field label="Melding">
+                      <textarea
+                        name="message"
+                        rows={6}
+                        defaultValue={`Hei,\n\nDu har mottatt en faktura fra ${String(company.name ?? "firmaet")} på ${(Number(invoice.totalOre) / 100).toLocaleString("nb-NO")} kr. Faktura og dokumentasjonsvedlegg følger vedlagt.\n\nMed vennlig hilsen\n${String(company.name ?? "")}`}
+                        required
+                      />
+                    </Field>
+                    {error && <p className="form-error">{error}</p>}
+                    <button className="primary full" disabled={busy}>
+                      {busy ? "Sender…" : "Send faktura med vedlegg"}
+                    </button>
+                  </form>
+                )}
+              </>
             ) : (
               <>
                 <div className="check-summary">
@@ -2050,7 +2149,13 @@ function BankScreen() {
   );
 }
 
-function SettingsScreen({ onSaved }: { onSaved: (message: string) => void }) {
+function SettingsScreen({
+  onSaved,
+  onboarding,
+}: {
+  onSaved: (message: string) => void;
+  onboarding?: { complete: boolean; completed: number; total: number };
+}) {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [error, setError] = useState("");
   async function load() {
@@ -2131,6 +2236,21 @@ function SettingsScreen({ onSaved }: { onSaved: (message: string) => void }) {
           </p>
         </div>
       </div>
+      {onboarding && !onboarding.complete && (
+        <section className="onboarding-banner">
+          <div>
+            <p className="eyebrow">Førstegangsoppsett</p>
+            <h2>Gjør firmaet klart for første faktura</h2>
+            <span>
+              Fyll inn organisasjonsnummer, kontaktinformasjon, adresse,
+              bankkonto og timesats. Du kan endre alt senere.
+            </span>
+          </div>
+          <strong>
+            {onboarding.completed} av {onboarding.total}
+          </strong>
+        </section>
+      )}
       <form className="settings-grid" onSubmit={saveProfile}>
         <section className="panel settings-card">
           <div className="panel-head">
