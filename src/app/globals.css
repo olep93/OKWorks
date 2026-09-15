@@ -175,6 +175,24 @@ h1 { font-size: clamp(28px, 3vw, 38px); line-height: 1.1; letter-spacing: -1.2px
 .secure-note span { color: #bfd0c9; font-size: 10px; line-height: 1.45; }
 .confirm-row { display: flex; gap: 9px; align-items: flex-start; padding-top: 14px; border-top: 1px solid var(--line); font-size: 11px; }
 .confirm-row input { accent-color: var(--forest); }
+.modal-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 20px; background: rgba(10,27,21,.58); backdrop-filter: blur(5px); animation: fade-in .16s ease; }
+.entry-modal { width: min(620px, 100%); max-height: min(780px, calc(100vh - 40px)); overflow-y: auto; background: var(--paper); border-radius: 18px; box-shadow: 0 30px 90px rgba(6,22,16,.3); }
+.modal-head { display: grid; grid-template-columns: 42px 1fr 38px; gap: 12px; align-items: center; padding: 20px 22px; border-bottom: 1px solid var(--line); }
+.modal-head h2 { font-size: 17px; }
+.modal-head p { margin: 3px 0 0; color: var(--muted); font-size: 11px; }
+.modal-title-icon { width: 42px; height: 42px; display: grid; place-items: center; color: var(--forest); background: var(--mint); border-radius: 12px; }
+.modal-title-icon svg { width: 19px; }
+.entry-modal form { padding: 22px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.field { display: grid; gap: 6px; color: #435049; font-size: 11px; font-weight: 750; }
+.field.wide, .check-input.wide { grid-column: 1 / -1; }
+.field input, .field select { width: 100%; min-height: 43px; padding: 9px 11px; border: 1px solid #d9e0dc; border-radius: 9px; outline: none; background: #fff; color: var(--ink); font-weight: 500; }
+.field input:focus, .field select:focus { border-color: var(--forest-2); box-shadow: 0 0 0 3px rgba(36,93,73,.1); }
+.field input[type="file"] { padding: 8px; color: var(--muted); }
+.check-input { display: flex; align-items: center; gap: 8px; padding: 4px 1px; color: var(--muted); font-size: 11px; }
+.check-input input { accent-color: var(--forest); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; padding-top: 17px; border-top: 1px solid var(--line); }
+@keyframes fade-in { from { opacity: 0; } }
 .save-toast { position: fixed; right: 25px; bottom: 25px; z-index: 60; display: flex; gap: 8px; align-items: center; padding: 11px 15px; border-radius: 11px; background: var(--ink); color: #fff; box-shadow: var(--shadow); font-size: 12px; animation: rise .25s ease; }
 .save-toast svg { width: 16px; color: var(--lime); }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
@@ -215,6 +233,11 @@ h1 { font-size: clamp(28px, 3vw, 38px); line-height: 1.1; letter-spacing: -1.2px
   .invoice-parties { grid-template-columns: 1fr; gap: 18px; }
   .invoice-dates { justify-self: stretch; width: auto; }
   .invoice-table { min-width: 520px; }
+  .modal-backdrop { align-items: end; padding: 0; }
+  .entry-modal { width: 100%; max-height: 90vh; border-radius: 20px 20px 0 0; }
+  .modal-head, .entry-modal form { padding: 18px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .field.wide, .check-input.wide { grid-column: auto; }
 }
 @media (max-width: 420px) {
   .metric-grid { grid-template-columns: 1fr; }

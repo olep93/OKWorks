@@ -7,9 +7,11 @@ import {
   MoreHorizontal, Package, Plus, Receipt, Search, Send, Settings,
   ShieldCheck, Users, WalletCards, X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 type Screen = "dashboard" | "order" | "invoice";
+type EntryKind = "Timer" | "Linje" | "Kjøring" | "Utlegg" | "Hotell" | "Bilde" | "Dokument";
+type TimelineEvent = { icon: typeof Gauge; title: string; text: string; amount: string; time: string };
 
 const orders = [
   { id: "2048", title: "Utskifting av kabel og armatur", customer: "Hansen Bygg AS", place: "Røyken → Oslo", amount: "18 420 kr", status: "Pågår", tone: "progress" },
@@ -30,6 +32,9 @@ export function OkWorksApp() {
   const [screen, setScreen] = useState<Screen>("dashboard");
   const [menuOpen, setMenuOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [activeForm, setActiveForm] = useState<EntryKind | null>(null);
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>(events);
+  const [addedAmount, setAddedAmount] = useState(0);
 
   useEffect(() => {
     if (!toast) return;
@@ -41,6 +46,12 @@ export function OkWorksApp() {
   const openOrder = () => { setScreen("order"); setMenuOpen(false); window.scrollTo({ top: 0 }); };
   const openInvoice = () => { setScreen("invoice"); setMenuOpen(false); window.scrollTo({ top: 0 }); };
   const goDashboard = () => { setScreen("dashboard"); setMenuOpen(false); window.scrollTo({ top: 0 }); };
+  const addEntry = (entry: TimelineEvent, amountOre: number) => {
+    setTimelineEvents((current) => [...current, entry]);
+    setAddedAmount((current) => current + amountOre);
+    setActiveForm(null);
+    notify(`${entry.title} er lagret`);
+  };
 
   return (
     <div className="app-shell">
@@ -68,11 +79,12 @@ export function OkWorksApp() {
         </header>
         <div className="content">
           {screen === "dashboard" && <Dashboard openOrder={openOrder} notify={notify} />}
-          {screen === "order" && <OrderView goBack={goDashboard} openInvoice={openInvoice} notify={notify} />}
+          {screen === "order" && <OrderView goBack={goDashboard} openInvoice={openInvoice} openForm={setActiveForm} events={timelineEvents} addedAmount={addedAmount} />}
           {screen === "invoice" && <InvoiceView openOrder={openOrder} notify={notify} />}
         </div>
       </main>
       {toast && <div className="save-toast" role="status"><Check />{toast}</div>}
+      {activeForm && <EntryModal kind={activeForm} onClose={() => setActiveForm(null)} onSave={addEntry} />}
     </div>
   );
 }
@@ -96,20 +108,21 @@ function Dashboard({ openOrder, notify }: { openOrder: () => void; notify: (mess
   </>;
 }
 
-function OrderView({ goBack, openInvoice, notify }: { goBack: () => void; openInvoice: () => void; notify: (message: string) => void }) {
+function OrderView({ goBack, openInvoice, openForm, events, addedAmount }: { goBack: () => void; openInvoice: () => void; openForm: (kind: EntryKind) => void; events: TimelineEvent[]; addedAmount: number }) {
+  const total = new Intl.NumberFormat("nb-NO").format(18_420 + Math.round(addedAmount / 100));
   return <div className="order-view">
-    <section className="order-hero"><button className="back-button" onClick={goBack}><ArrowLeft />Tilbake til dashboard</button><div className="order-hero-main"><div><p className="eyebrow">Ordre #2048 · Pågår</p><h1>Utskifting av kabel og armatur</h1><div className="order-meta"><span><Building2 />Hansen Bygg AS</span><span><CalendarDays />13.–15. september</span><span>Røyken → Oslo</span></div></div><div className="order-amount"><span>Registrert fakturerbart</span><strong>18 420 kr</strong></div></div></section>
+    <section className="order-hero"><button className="back-button" onClick={goBack}><ArrowLeft />Tilbake til dashboard</button><div className="order-hero-main"><div><p className="eyebrow">Ordre #2048 · Pågår</p><h1>Utskifting av kabel og armatur</h1><div className="order-meta"><span><Building2 />Hansen Bygg AS</span><span><CalendarDays />13.–15. september</span><span>Røyken → Oslo</span></div></div><div className="order-amount"><span>Registrert fakturerbart</span><strong>{total} kr</strong></div></div></section>
     <div className="quick-actions">
-      <Quick icon={Clock3} label="Timer" onClick={() => notify("Timer lagret på ordre #2048")} />
-      <Quick icon={Package} label="Linje" onClick={() => notify("Produktlinje lagt til")} />
-      <Quick icon={Gauge} label="Kjøring" onClick={() => notify("Kjøring åpnes snart")} />
-      <Quick icon={Receipt} label="Utlegg" onClick={() => notify("Utlegg åpnes snart")} />
-      <Quick icon={Building2} label="Hotell" onClick={() => notify("Hotellregistrering åpnes snart")} />
-      <Quick icon={Camera} label="Bilde" onClick={() => notify("Bildeopplasting åpnes snart")} />
-      <Quick icon={FileText} label="Dokument" onClick={() => notify("Dokumentopplasting åpnes snart")} />
+      <Quick icon={Clock3} label="Timer" onClick={() => openForm("Timer")} />
+      <Quick icon={Package} label="Linje" onClick={() => openForm("Linje")} />
+      <Quick icon={Gauge} label="Kjøring" onClick={() => openForm("Kjøring")} />
+      <Quick icon={Receipt} label="Utlegg" onClick={() => openForm("Utlegg")} />
+      <Quick icon={Building2} label="Hotell" onClick={() => openForm("Hotell")} />
+      <Quick icon={Camera} label="Bilde" onClick={() => openForm("Bilde")} />
+      <Quick icon={FileText} label="Dokument" onClick={() => openForm("Dokument")} />
     </div>
     <div className="order-columns">
-      <section className="panel"><div className="panel-head"><div><h2>Jobbaktivitet</h2><p>Alt som er registrert på ordren</p></div><button className="secondary" onClick={() => notify("Arbeidsnotat lagret")}><Plus />Legg til</button></div><div className="timeline"><div className="timeline-day">Mandag 13. september</div>{events.slice(0,3).map((event, i) => <Event key={i} {...event} />)}<div className="timeline-day">Tirsdag 14. september</div>{events.slice(3).map((event, i) => <Event key={i} {...event} />)}</div></section>
+      <section className="panel"><div className="panel-head"><div><h2>Jobbaktivitet</h2><p>Alt som er registrert på ordren</p></div><button className="secondary" onClick={() => openForm("Timer")}><Plus />Legg til</button></div><div className="timeline"><div className="timeline-day">Registrert på ordren</div>{events.map((event, i) => <Event key={`${event.title}-${i}`} {...event} />)}</div></section>
       <section className="panel"><div className="panel-head"><div><h2>Ferdigstill jobb</h2><p>Kontroller før fakturering</p></div></div><div className="preflight"><div className="check-summary"><div className="check-summary-icon"><CheckCircle2 /></div><div><b>Jobben er nesten klar</b><span>6 kontroller bestått · 1 advarsel</span></div></div><div className="check-list"><CheckLine text="5,5 timer registrert" /><CheckLine text="Materialer og kjøring registrert" /><CheckLine text="Før- og etter-bilder finnes" /><CheckLine text="Dokumentasjon er knyttet til ordren" /><CheckLine text="Arbeidsbeskrivelsen er kort" warning /></div><button className="primary highlight full" onClick={openInvoice}><CheckCircle2 />Kjør ferdigstillingskontroll</button></div></section>
     </div>
   </div>;
@@ -137,6 +150,90 @@ function InvoiceView({ openOrder, notify }: { openOrder: () => void; notify: (me
     </div>
   </div>;
 }
+
+const formCopy: Record<EntryKind, { title: string; intro: string; icon: typeof Gauge }> = {
+  Timer: { title: "Registrer timer", intro: "Legg arbeidstid til ordre #2048.", icon: Clock3 },
+  Linje: { title: "Legg til produkt eller tjeneste", intro: "Pris og MVA kan justeres før lagring.", icon: Package },
+  Kjøring: { title: "Registrer kjøring", intro: "Ruteberegning kobles på senere; demoen bruker oppgitt km.", icon: Gauge },
+  Utlegg: { title: "Registrer utlegg", intro: "Faktisk kostnad holdes separat fra fakturerbart beløp.", icon: Receipt },
+  Hotell: { title: "Registrer hotell", intro: "Påslag beregnes fra kostnaden du oppgir.", icon: Building2 },
+  Bilde: { title: "Legg til arbeidsbilde", intro: "Klassifiser bildet for automatisk arbeidsrapport.", icon: Camera },
+  Dokument: { title: "Legg til dokument", intro: "Dokumentet knyttes til denne ordren.", icon: FileText },
+};
+
+function EntryModal({ kind, onClose, onSave }: { kind: EntryKind; onClose: () => void; onSave: (entry: TimelineEvent, amountOre: number) => void }) {
+  const copy = formCopy[kind];
+  const Icon = copy.icon;
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const value = (name: string, fallback = "") => String(data.get(name) || fallback);
+    const numeric = (name: string) => Number(value(name, "0").replace(",", ".")) || 0;
+    let entry: TimelineEvent;
+    let amountOre = 0;
+
+    if (kind === "Timer") {
+      const hours = numeric("hours"); const rate = numeric("rate"); amountOre = Math.round(hours * rate * 100);
+      entry = { icon: Clock3, title: `Arbeidstid · ${hours} timer`, text: value("description", "Utført arbeid"), amount: `${Math.round(amountOre / 100).toLocaleString("nb-NO")} kr`, time: "Nå" };
+    } else if (kind === "Linje") {
+      const quantity = numeric("quantity"); const price = numeric("price"); amountOre = Math.round(quantity * price * 100);
+      entry = { icon: Package, title: `${value("product", "Produkt")} · ${quantity} ${value("unit", "stk")}`, text: value("description", "Produktlinje"), amount: `${Math.round(amountOre / 100).toLocaleString("nb-NO")} kr`, time: "Nå" };
+    } else if (kind === "Kjøring") {
+      const km = numeric("km"); const rate = numeric("rate"); amountOre = Math.round(km * rate * 100);
+      entry = { icon: Gauge, title: `Kjøring · ${km} km`, text: `${value("origin")} → ${value("destination")}`, amount: `${Math.round(amountOre / 100).toLocaleString("nb-NO")} kr`, time: "Nå" };
+    } else if (kind === "Utlegg") {
+      const cost = numeric("cost"); const markup = numeric("markup"); amountOre = Math.round(cost * (1 + markup / 100) * 100);
+      entry = { icon: Receipt, title: `${value("expenseType", "Utlegg")} · ${value("vendor", "Leverandør")}`, text: `Kostnad ${cost.toLocaleString("nb-NO")} kr · ${markup}% påslag`, amount: `${Math.round(amountOre / 100).toLocaleString("nb-NO")} kr`, time: "Nå" };
+    } else if (kind === "Hotell") {
+      const cost = numeric("cost"); const markup = numeric("markup"); amountOre = Math.round(cost * (1 + markup / 100) * 100);
+      entry = { icon: Building2, title: `${value("hotel", "Hotell")} · ${value("nights", "1")} natt`, text: `Kostnad ${cost.toLocaleString("nb-NO")} kr · ${markup}% påslag`, amount: `${Math.round(amountOre / 100).toLocaleString("nb-NO")} kr`, time: "Nå" };
+    } else if (kind === "Bilde") {
+      const file = data.get("file") as File | null;
+      entry = { icon: Camera, title: `Arbeidsbilde · ${value("category", "Annet")}`, text: value("caption", file?.name || "Bilde uten bildetekst"), amount: "Dokumentert", time: "Nå" };
+    } else {
+      const file = data.get("file") as File | null;
+      entry = { icon: FileText, title: value("title", "Dokument"), text: file?.name || "Dokument registrert", amount: "Vedlegg", time: "Nå" };
+    }
+    onSave(entry, amountOre);
+  }
+
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+    <section className="entry-modal" role="dialog" aria-modal="true" aria-labelledby="entry-modal-title">
+      <div className="modal-head"><div className="modal-title-icon"><Icon /></div><div><h2 id="entry-modal-title">{copy.title}</h2><p>{copy.intro}</p></div><button type="button" className="icon-button" aria-label="Lukk" onClick={onClose}><X /></button></div>
+      <form onSubmit={submit}>
+        <div className="form-grid">{kind === "Timer" && <>
+          <Field label="Dato"><input name="date" type="date" defaultValue="2026-09-15" required /></Field>
+          <Field label="Antall timer"><input name="hours" type="number" min="0.25" step="0.25" defaultValue="1.5" required /></Field>
+          <Field label="Timesats"><input name="rate" type="number" min="0" defaultValue="790" required /></Field>
+          <Field label="Beskrivelse" wide><input name="description" defaultValue="Montering og funksjonstest" required /></Field>
+        </>}{kind === "Linje" && <>
+          <Field label="Produkt / tjeneste" wide><select name="product" defaultValue="Kabel 3G2,5 mm²"><option>Kabel 3G2,5 mm²</option><option>Arbeidstime</option><option>Lampe 40W</option><option>Smusstillegg</option></select></Field>
+          <Field label="Antall"><input name="quantity" type="number" min="0.001" step="0.001" defaultValue="2" required /></Field>
+          <Field label="Enhet"><select name="unit"><option>stk</option><option>m</option><option>timer</option></select></Field>
+          <Field label="Pris"><input name="price" type="number" min="0" defaultValue="29" required /></Field>
+          <Field label="Beskrivelse"><input name="description" defaultValue="Tilleggsmateriell" /></Field>
+        </>}{kind === "Kjøring" && <>
+          <Field label="Fra"><input name="origin" defaultValue="Røyken" required /></Field><Field label="Til"><input name="destination" defaultValue="Oslo" required /></Field>
+          <Field label="Kilometer"><input name="km" type="number" min="0" step="0.1" defaultValue="46.3" required /></Field><Field label="Kr per km"><input name="rate" type="number" min="0" step="0.01" defaultValue="6.50" required /></Field>
+          <label className="check-input wide"><input name="roundTrip" type="checkbox" defaultChecked />Tur-retur er inkludert i kilometeren</label>
+        </>}{kind === "Utlegg" && <>
+          <Field label="Type"><select name="expenseType"><option>Materiell</option><option>Parkering</option><option>Taxi</option><option>Ferge</option><option>Annet</option></select></Field>
+          <Field label="Leverandør"><input name="vendor" defaultValue="Byggmakker" required /></Field><Field label="Faktisk kostnad"><input name="cost" type="number" min="0" step="0.01" defaultValue="249" required /></Field><Field label="Påslag %"><input name="markup" type="number" min="0" step="0.1" defaultValue="10" /></Field>
+        </>}{kind === "Hotell" && <>
+          <Field label="Hotell"><input name="hotel" defaultValue="Scandic" required /></Field><Field label="Antall netter"><input name="nights" type="number" min="1" defaultValue="1" required /></Field><Field label="Faktisk kostnad"><input name="cost" type="number" min="0" step="0.01" defaultValue="1490" required /></Field><Field label="Påslag %"><input name="markup" type="number" min="0" step="0.1" defaultValue="10" /></Field>
+        </>}{kind === "Bilde" && <>
+          <Field label="Bildetype"><select name="category"><option>Før</option><option>Avvik/skade</option><option>Under arbeid</option><option>Etter</option><option>Annet</option></select></Field><Field label="Velg bilde"><input name="file" type="file" accept="image/*" /></Field><Field label="Bildetekst" wide><input name="caption" defaultValue="Ferdig resultat" required /></Field>
+        </>}{kind === "Dokument" && <>
+          <Field label="Tittel"><input name="title" defaultValue="Arbeidsdokumentasjon" required /></Field><Field label="Velg dokument"><input name="file" type="file" accept=".pdf,.doc,.docx,image/*" /></Field>
+        </>}</div>
+        <div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Avbryt</button><button type="submit" className="primary"><Check />Lagre på ordren</button></div>
+      </form>
+    </section>
+  </div>;
+}
+
+function Field({ label, wide, children }: { label: string; wide?: boolean; children: React.ReactNode }) { return <label className={`field ${wide ? "wide" : ""}`}><span>{label}</span>{children}</label>; }
 
 function Metric({ icon: Icon, label, value, note, emphasis, positive }: { icon: typeof Gauge; label: string; value: string; note: string; emphasis?: boolean; positive?: boolean }) { return <article className={`metric-card ${emphasis ? "emphasis" : ""}`}><div className="metric-label">{label}<span className="metric-icon"><Icon /></span></div><span className="metric-value">{value}</span><span className={`metric-note ${positive ? "positive" : ""}`}>{note}</span></article>; }
 function Action({ icon: Icon, title, text, amber, onClick }: { icon: typeof Gauge; title: string; text: string; amber?: boolean; onClick: () => void }) { return <button className="action-row" onClick={onClick}><span className={`action-icon ${amber ? "amber" : ""}`}><Icon /></span><span><b>{title}</b><span>{text}</span></span><ChevronRight /></button>; }
