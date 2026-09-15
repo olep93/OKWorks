@@ -20,6 +20,13 @@ export const organizations = pgTable("organizations", {
   name: varchar("name", { length: 200 }).notNull(),
   organizationNumber: varchar("organization_number", { length: 20 }),
   email: varchar("email", { length: 320 }),
+  phone: varchar("phone", { length: 40 }),
+  address: text("address"),
+  postalCode: varchar("postal_code", { length: 16 }),
+  city: varchar("city", { length: 120 }),
+  logoStorageKey: text("logo_storage_key"),
+  invoiceEmail: varchar("invoice_email", { length: 320 }),
+  invoicePhone: varchar("invoice_phone", { length: 40 }),
   bankAccount: varchar("bank_account", { length: 32 }),
   vatRegistered: boolean("vat_registered").notNull().default(false),
   defaultPaymentTermsDays: integer("default_payment_terms_days").notNull().default(14),
@@ -28,11 +35,23 @@ export const organizations = pgTable("organizations", {
   ...timestamps,
 });
 
+export const organizationSettings = pgTable("organization_settings", {
+  organizationId: uuid("organization_id").primaryKey().references(() => organizations.id, { onDelete: "cascade" }),
+  mileageRateOre: bigint("mileage_rate_ore", { mode: "number" }).notNull().default(500),
+  dietDayRateOre: bigint("diet_day_rate_ore", { mode: "number" }).notNull().default(0),
+  dietOvernightRateOre: bigint("diet_overnight_rate_ore", { mode: "number" }).notNull().default(0),
+  hotelMarkupBasisPoints: integer("hotel_markup_basis_points").notNull().default(0),
+  expenseMarkupBasisPoints: integer("expense_markup_basis_points").notNull().default(0),
+  ...timestamps,
+});
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: varchar("email", { length: 320 }).notNull(),
   name: varchar("name", { length: 160 }).notNull(),
   passwordHash: text("password_hash"),
+  setupTokenHash: varchar("setup_token_hash", { length: 64 }),
+  setupExpiresAt: timestamp("setup_expires_at", { withTimezone: true }),
   emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
   ...timestamps,
 }, (table) => [uniqueIndex("users_email_unique").on(table.email)]);
