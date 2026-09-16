@@ -22,6 +22,7 @@ import {
   Receipt,
   Settings,
   Sparkles,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -78,6 +79,7 @@ type Screen =
   | "order"
   | "invoices"
   | "invoice"
+  | "products"
   | "bank"
   | "settings";
 type EntryKind =
@@ -454,7 +456,10 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
             <FileText />
             Fakturaer
           </button>
-          <button className="nav-button" disabled>
+          <button
+            className={`nav-button ${screen === "products" ? "active" : ""}`}
+            onClick={() => navigate("products")}
+          >
             <Package />
             Produkter & tjenester
           </button>
@@ -507,6 +512,8 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
                   ? "Kunder"
                   : screen === "bank"
                     ? "Bank og betaling"
+                    : screen === "products"
+                      ? "Produkter og tjenester"
                     : screen === "settings"
                       ? "Firmaprofil"
                       : screen === "orders"
@@ -526,6 +533,8 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
             </div>
           ) : screen === "bank" ? (
             <BankScreen />
+          ) : screen === "products" ? (
+            <ProductsScreen onSaved={setToast} />
           ) : screen === "settings" ? (
             <SettingsScreen
               onSaved={(message) => {
@@ -559,6 +568,12 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
               customer={customerMap.get(selectedOrder.customerId)}
               onBack={() => navigate("orders")}
               onInvoice={openInvoice}
+              onDeleted={async () => {
+                setSelectedOrderId(null);
+                await refresh();
+                navigate("orders");
+                setToast("Ordren er slettet");
+              }}
             />
           ) : (
             <Dashboard
@@ -849,11 +864,13 @@ function OrderDetails({
   customer,
   onBack,
   onInvoice,
+  onDeleted,
 }: {
   order: Order;
   customer?: Customer;
   onBack: () => void;
   onInvoice: (id: string) => void;
+  onDeleted: () => Promise<void>;
 }) {
   const [timeEntries, setTimeEntries] = useState<
     Array<{
@@ -864,6 +881,7 @@ function OrderDetails({
       description: string | null;
     }>
   >([]);
+  const [deleting, setDeleting] = useState(false);
   const [extraEntries, setExtraEntries] = useState<ExtraEntry[]>([]);
   const [showTime, setShowTime] = useState(false);
   const [entryKind, setEntryKind] = useState<EntryKind | null>(null);
@@ -908,6 +926,25 @@ function OrderDetails({
       return;
     }
     onInvoice(data.invoice.id);
+  }
+  async function deleteOrder() {
+    if (
+      !window.confirm(
+        `Slette ordre #${order.orderNumber}? Registreringer og vedlegg på ordren slettes også. Dette kan ikke angres.`,
+      )
+    )
+      return;
+    setDeleting(true);
+    const response = await fetch(`/api/orders/${order.id}`, {
+      method: "DELETE",
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      window.alert(result.error ?? "Kunne ikke slette ordren.");
+      setDeleting(false);
+      return;
+    }
+    await onDeleted();
   }
   return (
     <div className="order-view">
@@ -972,6 +1009,13 @@ function OrderDetails({
         >
           <FileText />+ DOKUMENT
         </button>
+      </div>
+      <div className="order-danger-actions">
+        <button className="danger-button" onClick={deleteOrder} disabled={deleting}>
+          <Trash2 />
+          {deleting ? "Sletter…" : "Slett ordre"}
+        </button>
+        <span>Ordre med fakturautkast eller faktura kan ikke slettes.</span>
       </div>
       {timeEntries.length || extraEntries.length ? (
         <section className="panel time-list">
@@ -1625,7 +1669,17 @@ function InvoiceScreen({
     setPreflight(await checkResponse.json());
   }
   useEffect(() => {
-    load();
+    Promise.all([
+      fetch(`/api/invoices/${invoiceId}`, { cache: "no-store" }).then((r) =>
+        r.json(),
+      ),
+      fetch(`/api/invoices/${invoiceId}/preflight`, {
+        cache: "no-store",
+      }).then((r) => r.json()),
+    ]).then(([invoiceData, checkData]) => {
+      setData(invoiceData);
+      setPreflight(checkData);
+    });
   }, [invoiceId]);
   if (!data?.invoice)
     return (
@@ -2144,6 +2198,136 @@ function BankScreen() {
             </button>
           )}
         </div>
+      </section>
+    </>
+  );
+}
+
+function ProductsScreen({ onSaved }: { onSaved: (message: string) => void }) {
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function load() {
+    const response = await fetch("/api/profile", { cache: "no-store" });
+    const result = await response.json();
+    if (!response.ok) {
+      setError(result.error ?? "Kunne ikke hente varer og tjenester.");
+      return;
+    }
+    setProfile(result);
+  }
+
+  useEffect(() => {
+    fetch("/api/profile", { cache: "no-store" })
+      .then(async (response) => ({
+        ok: response.ok,
+        result: await response.json(),
+      }))
+      .then(({ ok, result }) => {
+        if (!ok) {
+          setError(result.error ?? "Kunne ikke hente varer og tjenester.");
+          return;
+        }
+        setProfile(result);
+      });
+  }, []);
+
+  async function addProduct(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const form = event.currentTarget;
+    const raw = Object.fromEntries(new FormData(form).entries());
+    raw.priceOre = String(Math.round(Number(raw.priceOre || 0) * 100));
+    raw.vatBasisPoints = String(
+      Math.round(Number(raw.vatBasisPoints || 0) * 100),
+    );
+    const response = await fetch("/api/products", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(raw),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      setError(result.error ?? "Kunne ikke legge til varen eller tjenesten.");
+      return;
+    }
+    form.reset();
+    await load();
+    onSaved("Varen eller tjenesten er lagt til");
+  }
+
+  async function deleteProduct(id: string, name: string) {
+    if (!window.confirm(`Slette «${name}» fra hurtigvalgene?`)) return;
+    setBusyId(id);
+    setError("");
+    const response = await fetch(`/api/products?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      setError(result.error ?? "Kunne ikke slette varen eller tjenesten.");
+      setBusyId(null);
+      return;
+    }
+    await load();
+    setBusyId(null);
+    onSaved("Varen eller tjenesten er slettet");
+  }
+
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Varekatalog</p>
+          <h1>Produkter og tjenester</h1>
+          <p className="subhead">
+            Lag standardlinjer som kan brukes som hurtigvalg på ordrene.
+          </p>
+        </div>
+      </div>
+      <section className="panel settings-card product-settings">
+        <div className="panel-head">
+          <div>
+            <h2>Ny vare eller tjeneste</h2>
+            <p>Pris og MVA kan tilpasses når arbeidet registreres.</p>
+          </div>
+        </div>
+        <form className="product-form" onSubmit={addProduct}>
+          <input name="name" placeholder="Navn" required />
+          <select name="category" aria-label="Kategori">
+            <option>Tjeneste</option>
+            <option>Vare</option>
+            <option>Tillegg</option>
+          </select>
+          <input name="unit" placeholder="Enhet, f.eks. time" required />
+          <input name="priceOre" type="number" min="0" step="0.01" placeholder="Pris kr" required />
+          <input name="vatBasisPoints" type="number" min="0" max="100" step="0.01" defaultValue="25" aria-label="MVA prosent" required />
+          <button className="primary"><Plus />Legg til</button>
+        </form>
+        {error && <p className="form-error settings-error">{error}</p>}
+        {!profile ? (
+          <p className="settings-empty">Laster varekatalog…</p>
+        ) : profile.products.length ? (
+          <div className="product-list">
+            {profile.products.map((product) => (
+              <div key={product.id}>
+                <div>
+                  <b>{product.name}</b>
+                  <span>
+                    {product.category ?? "Vare/tjeneste"} ·{" "}
+                    {(product.defaultPriceOre / 100).toLocaleString("nb-NO")} kr / {product.unit} · {product.vatBasisPoints / 100}% MVA
+                  </span>
+                </div>
+                <button className="danger-button" onClick={() => void deleteProduct(product.id, product.name)} disabled={busyId === product.id}>
+                  <Trash2 />{busyId === product.id ? "Sletter…" : "Slett"}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="settings-empty">Ingen varer eller tjenester ennå.</p>
+        )}
       </section>
     </>
   );

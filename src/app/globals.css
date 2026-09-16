@@ -269,6 +269,8 @@ h1 { font-size: clamp(28px, 3vw, 38px); line-height: 1.1; letter-spacing: -1.2px
 .text-button { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-weight: 700; }
 .heading-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .primary:disabled, .nav-button:disabled { opacity: .45; cursor: not-allowed; }
+.order-danger-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 14px 0 22px; }.order-danger-actions span { color: var(--muted); font-size: 12px; }.danger-button { display: inline-flex; align-items: center; gap: 7px; padding: 9px 12px; border: 1px solid #e5b5b5; border-radius: 9px; background: #fff7f7; color: #a62b2b; font-weight: 700; }.danger-button:hover { background: #ffeded; }.danger-button:disabled { opacity: .55; cursor: not-allowed; }.danger-button svg { width: 16px; height: 16px; }.product-list .danger-button { margin-left: auto; }.product-list > div > div { display: grid; gap: 3px; }
+.settings-error { margin: 0 20px 18px; }
 .empty-state { min-height: 330px; padding: 48px 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .empty-state h2 { margin: 16px 0 7px; }.empty-state p { max-width: 470px; margin: 0 0 22px; color: var(--muted); line-height: 1.55; }
 .empty-icon, .customer-icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 15px; color: #294137; background: #e8f2ec; }
