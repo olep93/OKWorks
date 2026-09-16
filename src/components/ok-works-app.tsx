@@ -82,6 +82,11 @@ type Screen =
   | "products"
   | "bank"
   | "settings";
+type PortalRoute = {
+  screen: Screen;
+  orderId: string | null;
+  invoiceId: string | null;
+};
 type EntryKind =
   | "LINE"
   | "DRIVING"
@@ -113,6 +118,34 @@ const orderStatusLabel = (status: string) =>
         : "Åpen";
 const orderStatusClass = (status: string) =>
   status === "INVOICED" ? "ready" : status === "CLOSED" ? "progress" : "open";
+
+const topLevelScreens: Screen[] = [
+  "dashboard",
+  "orders",
+  "customers",
+  "invoices",
+  "products",
+  "bank",
+  "settings",
+];
+
+function readPortalRoute(): PortalRoute {
+  if (typeof window === "undefined")
+    return { screen: "dashboard", orderId: null, invoiceId: null };
+  const [view, encodedId] = window.location.hash.replace(/^#\/?/, "").split("/");
+  const id = encodedId ? decodeURIComponent(encodedId) : null;
+  if (view === "order" && id)
+    return { screen: "order", orderId: id, invoiceId: null };
+  if (view === "invoice" && id)
+    return { screen: "invoice", orderId: null, invoiceId: id };
+  if (topLevelScreens.includes(view as Screen))
+    return { screen: view as Screen, orderId: null, invoiceId: null };
+  return { screen: "dashboard", orderId: null, invoiceId: null };
+}
+
+function portalHash(screen: Screen, id?: string) {
+  return `#/${screen}${id ? `/${encodeURIComponent(id)}` : ""}`;
+}
 
 async function compressImage(file: File) {
   if (!file.type.startsWith("image/") || file.size < 700_000) return file;
@@ -352,12 +385,15 @@ function Login({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
 }
 
 function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
+  const initialRoute = useMemo(() => readPortalRoute(), []);
   const [data, setData] = useState<AppData>({ customers: [], orders: [] });
   const [loading, setLoading] = useState(true);
-  const [screen, setScreen] = useState<Screen>("dashboard");
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [screen, setScreen] = useState<Screen>(initialRoute.screen);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(
+    initialRoute.orderId,
+  );
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(
-    null,
+    initialRoute.invoiceId,
   );
   const [modal, setModal] = useState<Modal>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -383,11 +419,25 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
         !value.onboarding?.complete &&
         !value.customers?.length &&
         !value.orders?.length
-      )
+      ) {
         setScreen("settings");
+        window.history.replaceState(null, "", portalHash("settings"));
+      }
       setLoading(false);
     });
   }, [onLogout]);
+  useEffect(() => {
+    const restoreRoute = () => {
+      const route = readPortalRoute();
+      setScreen(route.screen);
+      setSelectedOrderId(route.orderId);
+      setSelectedInvoiceId(route.invoiceId);
+      setModal(null);
+      setMenuOpen(false);
+    };
+    window.addEventListener("popstate", restoreRoute);
+    return () => window.removeEventListener("popstate", restoreRoute);
+  }, []);
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(""), 2500);
@@ -400,17 +450,28 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
   const selectedOrder =
     data.orders.find((order) => order.id === selectedOrderId) ?? null;
   const openOrder = (id: string) => {
+    window.history.pushState(null, "", portalHash("order", id));
     setSelectedOrderId(id);
     setScreen("order");
     setMenuOpen(false);
   };
   const openInvoice = (id: string) => {
+    window.history.pushState(null, "", portalHash("invoice", id));
     setSelectedInvoiceId(id);
     setScreen("invoice");
     setMenuOpen(false);
   };
-  const navigate = (next: Screen) => {
+  const navigate = (next: Screen, historyMode: "push" | "replace" = "push") => {
+    const hash = portalHash(next);
+    if (window.location.hash !== hash)
+      window.history[historyMode === "replace" ? "replaceState" : "pushState"](
+        null,
+        "",
+        hash,
+      );
     setScreen(next);
+    setSelectedOrderId(null);
+    setSelectedInvoiceId(null);
     setMenuOpen(false);
   };
   async function logout() {
@@ -571,7 +632,7 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
               onDeleted={async () => {
                 setSelectedOrderId(null);
                 await refresh();
-                navigate("orders");
+                navigate("orders", "replace");
                 setToast("Ordren er slettet");
               }}
             />
