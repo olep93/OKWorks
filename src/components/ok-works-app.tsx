@@ -2101,6 +2101,7 @@ function BankScreen() {
   };
   const [data, setData] = useState<BankData | null>(null);
   const [banks, setBanks] = useState<Array<{ id: string; name: string }>>([]);
+  const [banksLoading, setBanksLoading] = useState(false);
   const [bankId, setBankId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -2110,16 +2111,35 @@ function BankScreen() {
       .then((response) => response.json())
       .then((value) => {
         setData(value);
-        if (value.configured)
+        if (value.configured) {
+          setBanksLoading(true);
           fetch("/api/bank/banks", { cache: "no-store" })
             .then((response) => response.json())
             .then((result) => {
               setBanks(result.banks ?? []);
               if (result.banks?.[0]) setBankId(result.banks[0].id);
               if (result.error) setError(result.error);
-            });
+            })
+            .catch(() => setError("Kunne ikke hente banklisten. Prøv igjen."))
+            .finally(() => setBanksLoading(false));
+        }
       });
   }, []);
+  async function reloadBanks() {
+    setBanksLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/bank/banks", { cache: "no-store" });
+      const value = await response.json();
+      setBanks(value.banks ?? []);
+      setBankId(value.banks?.[0]?.id ?? "");
+      if (!response.ok) setError(value.error ?? "Kunne ikke hente banklisten.");
+    } catch {
+      setError("Kunne ikke hente banklisten. Prøv igjen.");
+    } finally {
+      setBanksLoading(false);
+    }
+  }
   async function connect() {
     setBusy(true);
     setError("");
@@ -2224,9 +2244,9 @@ function BankScreen() {
               <select
                 value={bankId}
                 onChange={(event) => setBankId(event.target.value)}
-                disabled={busy}
+                disabled={busy || banksLoading || !banks.length}
               >
-                <option value="">Velg bank</option>
+                <option value="">{banksLoading ? "Henter banker…" : banks.length ? "Velg bank" : "Ingen banker hentet"}</option>
                 {banks.map((bank) => (
                   <option value={bank.id} key={bank.id}>
                     {bank.name}
@@ -2234,6 +2254,9 @@ function BankScreen() {
                 ))}
               </select>
             </label>
+            {!banksLoading && !banks.length && (
+              <button className="secondary" onClick={reloadBanks}>Prøv å hente banker igjen</button>
+            )}
             <p>
               Du sendes videre til bankens egen sikre side for samtykke og
               eventuell BankID.
