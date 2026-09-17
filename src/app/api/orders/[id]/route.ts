@@ -11,21 +11,24 @@ export async function DELETE(
   try {
     const user = await requireUser();
     const { id } = await context.params;
-    const [order] = await db
+    const result = await db.transaction(async (tx) => {
+    // Lock existing invoices before the order, matching finalization's lock order.
+    await tx.select({ id: invoices.id }).from(invoices).where(and(eq(invoices.sourceOrderId, id), eq(invoices.organizationId, user.organizationId))).for("update");
+    const [order] = await tx
       .select({ id: orders.id })
       .from(orders)
       .where(
         and(eq(orders.id, id), eq(orders.organizationId, user.organizationId)),
       )
-      .limit(1);
+      .limit(1).for("update");
     if (!order)
       return NextResponse.json(
         { error: "Ordren finnes ikke." },
         { status: 404 },
       );
 
-    const [invoice] = await db
-      .select({ id: invoices.id })
+    const invoiceRows = await tx
+      .select({ id: invoices.id, status: invoices.status, invoiceNumber: invoices.invoiceNumber, finalizedAt: invoices.finalizedAt })
       .from(invoices)
       .where(
         and(
@@ -33,26 +36,29 @@ export async function DELETE(
           eq(invoices.organizationId, user.organizationId),
         ),
       )
-      .limit(1);
-    if (invoice)
+      .for("update");
+    if (invoiceRows.some((invoice) => invoice.status !== "DRAFT" || invoice.invoiceNumber !== null || invoice.finalizedAt !== null))
       return NextResponse.json(
         {
           error:
-            "Ordren har et fakturautkast eller en faktura og kan derfor ikke slettes.",
+            "Ordren har en finalisert faktura og kan derfor ikke slettes.",
         },
         { status: 409 },
       );
 
-    await db
+    await tx.delete(invoices).where(and(eq(invoices.sourceOrderId, id), eq(invoices.organizationId, user.organizationId), eq(invoices.status, "DRAFT")));
+    await tx
       .delete(orders)
       .where(
         and(eq(orders.id, id), eq(orders.organizationId, user.organizationId)),
       );
     return NextResponse.json({ ok: true });
+    });
+    return result;
   } catch {
     return NextResponse.json(
       { error: "Kunne ikke slette ordren." },
-      { status: 401 },
+      { status: 500 },
     );
   }
 }

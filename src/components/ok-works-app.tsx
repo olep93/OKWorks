@@ -991,7 +991,7 @@ function OrderDetails({
   async function deleteOrder() {
     if (
       !window.confirm(
-        `Slette ordre #${order.orderNumber}? Registreringer og vedlegg på ordren slettes også. Dette kan ikke angres.`,
+        `Slette ordre #${order.orderNumber}? Eventuelle fakturautkast, registreringer og vedlegg på ordren slettes også. Dette kan ikke angres. Finaliserte fakturaer kan ikke slettes.`,
       )
     )
       return;
@@ -1076,7 +1076,7 @@ function OrderDetails({
           <Trash2 />
           {deleting ? "Sletter…" : "Slett ordre"}
         </button>
-        <span>Ordre med fakturautkast eller faktura kan ikke slettes.</span>
+        <span>Fakturautkast slettes sammen med ordren. Finaliserte fakturaer beskyttes.</span>
       </div>
       {timeEntries.length || extraEntries.length ? (
         <section className="panel time-list">
