@@ -109,7 +109,7 @@ type ExtraEntry = {
   mimeType?: string | null;
   fileSize?: number | null;
 };
-type EditableRegistration = { id: string; type: "TIME" | "EXTRA"; kind: string; workDate: string; title: string; description: string | null; quantity: number; rateOre: number; amountOre: number };
+type EditableRegistration = { id: string; type: "TIME" | "EXTRA"; kind: string; workDate: string; title: string; description: string | null; quantity: number; rateOre: number; amountOre: number; fileName?: string | null; mimeType?: string | null };
 const orderStatusLabel = (status: string) =>
   status === "INVOICED"
     ? "Fakturert · ubetalt"
@@ -1136,7 +1136,7 @@ function OrderDetails({
                   ? `${(entry.amountOre / 100).toLocaleString("nb-NO")} kr`
                   : "Dokumentert"}
               </strong>
-              <button className="secondary" disabled={["INVOICED", "CLOSED", "CANCELLED"].includes(order.status)} onClick={() => setEditingRegistration({ id: entry.id, type: "EXTRA", kind: entry.kind, workDate: entry.workDate, title: entry.title, description: entry.description, quantity: (entry.quantityThousandths ?? 1000) / 1000, rateOre: entry.unitRateOre ?? 0, amountOre: entry.amountOre })}>Rediger</button>
+              <button className="secondary" disabled={["INVOICED", "CLOSED", "CANCELLED"].includes(order.status)} onClick={() => setEditingRegistration({ ...entry, type: "EXTRA", quantity: (entry.quantityThousandths ?? 1000) / 1000, rateOre: entry.unitRateOre ?? 0 })}>Rediger</button>
             </div>
           ))}
         </section>
@@ -1271,6 +1271,20 @@ function OrderEntryModal({
         raw.markupBasisPoints = Math.round(Number(raw.markupBasisPoints) * 100);
       body = JSON.stringify(raw);
       headers["content-type"] = "application/json";
+      if (kind === "HOTEL") {
+        const file = form.get("file");
+        if (file instanceof File && file.size) {
+          if (!["image/jpeg", "image/png", "application/pdf"].includes(file.type)) {
+            setError("Bruk JPG, PNG eller PDF for kvitteringen.");
+            return;
+          }
+          const multipart = new FormData();
+          for (const [key, value] of Object.entries(raw)) if (key !== "file") multipart.set(key, String(value));
+          multipart.set("file", file.type.startsWith("image/") ? await compressImage(file) : file);
+          body = multipart;
+          delete headers["content-type"];
+        }
+      }
     } else {
       const file = form.get("file");
       if (kind === "IMAGE" && file instanceof File)
@@ -1496,6 +1510,12 @@ function OrderEntryModal({
                 />
               </Field>
             )}
+            {kind === "HOTEL" && (
+              <Field label="Last opp kvittering (valgfritt)" wide>
+                <input name="file" type="file" accept="image/jpeg,image/png,application/pdf" />
+                <small>Velg et kvitteringsbilde eller en PDF, maks 4 MB. Kvitteringen følger fakturavedlegget.</small>
+              </Field>
+            )}
             <Field label="Beskrivelse" wide>
               <input name="description" />
             </Field>
@@ -1548,9 +1568,9 @@ function RegistrationEditModal({ entry, orderId, onClose, onSaved }: { entry: Ed
   return (
     <div className="modal-backdrop"><section className="entry-modal" role="dialog" aria-modal="true" aria-label="Rediger registrering">
       <div className="modal-head"><div><h2>Rediger registrering</h2><p>Beløp og satser er eks. MVA. Fakturautkast oppdateres ved lagring.</p></div><button className="icon-button" onClick={onClose} disabled={busy} aria-label="Lukk"><X /></button></div>
-      {["IMAGE", "DOCUMENT"].includes(entry.kind) && (
+      {(["IMAGE", "DOCUMENT"].includes(entry.kind) || entry.fileName) && (
         <div className="registration-file-preview">
-          {entry.kind === "IMAGE" && !previewError && <Image src={`/api/orders/${orderId}/entries/${entry.id}/file`} alt={entry.title} width={600} height={350} unoptimized onError={() => setPreviewError(true)} style={{ width: "100%", height: "auto", maxHeight: 350, objectFit: "contain" }} />}
+          {(entry.kind === "IMAGE" || entry.mimeType?.startsWith("image/")) && !previewError && <Image src={`/api/orders/${orderId}/entries/${entry.id}/file`} alt={entry.title} width={600} height={350} unoptimized onError={() => setPreviewError(true)} style={{ width: "100%", height: "auto", maxHeight: 350, objectFit: "contain" }} />}
           {previewError && <p className="form-error" role="alert">Bildet kunne ikke forhåndsvises.</p>}
           <a className="secondary" href={`/api/orders/${orderId}/entries/${entry.id}/file`} target="_blank" rel="noopener noreferrer">Åpne opplastet fil</a>
         </div>

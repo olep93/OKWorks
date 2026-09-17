@@ -24,7 +24,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const parsed = inputSchema.safeParse(raw); if (!parsed.success) return NextResponse.json({ error: "Kontroller informasjonen." }, { status: 400 }); const value = parsed.data;
     const file = form?.get("file");
     let fileData: Uint8Array | null = null; let mimeType: string | null = null; let fileSize: number | null = null; let fileName = value.fileName || null;
-    if (value.kind === "IMAGE" || value.kind === "DOCUMENT") {
+    if (value.kind === "IMAGE" || value.kind === "DOCUMENT" || (value.kind === "HOTEL" && file instanceof File && file.size > 0)) {
       if (!(file instanceof File) || !file.size) return NextResponse.json({ error: "Velg en fil som skal lastes opp." }, { status: 400 });
       if (file.size > 4 * 1024 * 1024) return NextResponse.json({ error: "Filen er for stor. Maksimal størrelse er 4 MB." }, { status: 413 });
       const allowed = value.kind === "IMAGE" ? ["image/jpeg", "image/png"] : ["application/pdf", "image/jpeg", "image/png"];
