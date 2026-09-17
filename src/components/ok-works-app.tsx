@@ -397,6 +397,7 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
     initialRoute.invoiceId,
   );
   const [modal, setModal] = useState<Modal>(null);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [toast, setToast] = useState("");
   async function refresh() {
@@ -434,6 +435,7 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
       setSelectedOrderId(route.orderId);
       setSelectedInvoiceId(route.invoiceId);
       setModal(null);
+      setEditingCustomer(null);
       setMenuOpen(false);
     };
     window.addEventListener("popstate", restoreRoute);
@@ -616,6 +618,10 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
             <Customers
               customers={data.customers}
               onNew={() => setModal("customer")}
+              onEdit={(customer) => {
+                setEditingCustomer(customer);
+                setModal("customer");
+              }}
             />
           ) : screen === "orders" ? (
             <Orders
@@ -653,9 +659,11 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
         <CreateModal
           kind={modal}
           customers={data.customers}
-          onClose={() => setModal(null)}
+          customer={editingCustomer}
+          onClose={() => { setModal(null); setEditingCustomer(null); }}
           onCreated={async (message) => {
             setModal(null);
+            setEditingCustomer(null);
             await refresh();
             setToast(message);
           }}
@@ -775,9 +783,11 @@ function Dashboard({
 function Customers({
   customers,
   onNew,
+  onEdit,
 }: {
   customers: Customer[];
   onNew: () => void;
+  onEdit: (customer: Customer) => void;
 }) {
   return (
     <>
@@ -813,6 +823,7 @@ function Customers({
                     "Ingen kontaktinformasjon"}
                 </span>
               </div>
+              <button className="secondary" style={{ marginLeft: "auto" }} onClick={() => onEdit(customer)}>Rediger</button>
             </article>
           ))}
         </section>
@@ -2774,11 +2785,13 @@ function CreateModal({
   customers,
   onClose,
   onCreated,
+  customer,
 }: {
   kind: Exclude<Modal, null>;
   customers: Customer[];
   onClose: () => void;
   onCreated: (message: string) => void;
+  customer?: Customer | null;
 }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -2793,16 +2806,16 @@ function CreateModal({
       const response = await fetch(
         kind === "customer" ? "/api/customers" : "/api/orders",
         {
-          method: "POST",
+          method: kind === "customer" && customer ? "PATCH" : "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(values),
+          body: JSON.stringify(kind === "customer" && customer ? { ...values, id: customer.id } : values),
         },
       );
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       await onCreated(
         kind === "customer"
-          ? "Kunden er opprettet"
+          ? customer ? "Kunden er oppdatert" : "Kunden er opprettet"
           : `Ordre #${data.order.orderNumber} er opprettet`,
       );
     } catch (reason) {
@@ -2820,7 +2833,7 @@ function CreateModal({
       <section className="entry-modal" role="dialog" aria-modal="true">
         <div className="modal-head">
           <div>
-            <h2>{kind === "customer" ? "Opprett kunde" : "Opprett ordre"}</h2>
+          <h2>{kind === "customer" ? customer ? "Rediger kunde" : "Opprett kunde" : "Opprett ordre"}</h2>
             <p>
               {kind === "customer"
                 ? "Legg inn det du har nå. Resten kan fylles ut senere."
@@ -2836,20 +2849,22 @@ function CreateModal({
             {kind === "customer" ? (
               <>
                 <Field label="Kundenavn" wide>
-                  <input name="name" required />
+                  <input name="name" defaultValue={customer?.name ?? ""} required />
                 </Field>
                 <Field label="Organisasjonsnummer">
-                  <input name="organizationNumber" />
+                  <input name="organizationNumber" defaultValue={customer?.organizationNumber ?? ""} />
                 </Field>
                 <Field label="E-post">
-                  <input name="email" type="email" />
+                  <input name="email" type="email" defaultValue={customer?.email ?? ""} />
                 </Field>
                 <Field label="Telefon">
-                  <input name="phone" />
+                  <input name="phone" defaultValue={customer?.phone ?? ""} />
                 </Field>
                 <Field label="Adresse" wide>
-                  <input name="address" />
+                  <input name="address" defaultValue={customer?.address ?? ""} />
                 </Field>
+                <Field label="Postnummer"><input name="postalCode" defaultValue={customer?.postalCode ?? ""} /></Field>
+                <Field label="Sted"><input name="city" defaultValue={customer?.city ?? ""} /></Field>
               </>
             ) : (
               <>
@@ -2886,7 +2901,7 @@ function CreateModal({
               {busy
                 ? "Lagrer…"
                 : kind === "customer"
-                  ? "Opprett kunde"
+                  ? customer ? "Lagre endringer" : "Opprett kunde"
                   : "Opprett ordre"}
             </button>
           </div>
