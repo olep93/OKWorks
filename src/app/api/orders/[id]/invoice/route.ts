@@ -29,6 +29,11 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     const subtotalOre = prepared.reduce((sum, line) => sum + line.subtotalOre, 0); const vatAmountOre = prepared.reduce((sum, line) => sum + line.vatAmountOre, 0); const totalOre = subtotalOre + vatAmountOre;
     const invoice = await db.transaction(async (tx) => {
       let draft = existingInvoice;
+      if (draft) {
+        const [current] = await tx.select().from(invoices).where(and(eq(invoices.id, draft.id), eq(invoices.organizationId, user.organizationId))).for("update");
+        if (!current || current.status !== "DRAFT") throw new Error("INVOICE_NO_LONGER_DRAFT");
+        draft = current;
+      }
       const issueDate = new Date(); const dueDate = new Date(issueDate); dueDate.setDate(dueDate.getDate() + organization.defaultPaymentTermsDays);
       if (!draft) [draft] = await tx.insert(invoices).values({ organizationId: user.organizationId, sourceOrderId: id, customerId: customer.id, status: "DRAFT", issueDate, dueDate, subtotalOre, vatAmountOre, totalOre, remainingAmountOre: totalOre, organizationSnapshot: organization, customerSnapshot: customer, bankAccountSnapshot: organization.bankAccount, idempotencyKey: randomUUID() }).returning();
       else await tx.update(invoices).set({ issueDate, dueDate, subtotalOre, vatAmountOre, totalOre, remainingAmountOre: totalOre, organizationSnapshot: organization, customerSnapshot: customer, bankAccountSnapshot: organization.bankAccount, updatedAt: new Date() }).where(eq(invoices.id, draft.id));

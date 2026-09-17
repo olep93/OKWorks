@@ -109,6 +109,7 @@ type ExtraEntry = {
   mimeType?: string | null;
   fileSize?: number | null;
 };
+type EditableRegistration = { id: string; type: "TIME" | "EXTRA"; kind: string; workDate: string; title: string; description: string | null; quantity: number; rateOre: number; amountOre: number };
 const orderStatusLabel = (status: string) =>
   status === "INVOICED"
     ? "Fakturert · ubetalt"
@@ -955,6 +956,7 @@ function OrderDetails({
     }>
   >([]);
   const [deleting, setDeleting] = useState(false);
+  const [editingRegistration, setEditingRegistration] = useState<EditableRegistration | null>(null);
   const [extraEntries, setExtraEntries] = useState<ExtraEntry[]>([]);
   const [showTime, setShowTime] = useState(false);
   const [entryKind, setEntryKind] = useState<EntryKind | null>(null);
@@ -1117,6 +1119,7 @@ function OrderDetails({
                 ).toLocaleString("nb-NO")}{" "}
                 kr
               </strong>
+              <button className="secondary" disabled={["INVOICED", "CLOSED", "CANCELLED"].includes(order.status)} onClick={() => setEditingRegistration({ id: entry.id, type: "TIME", kind: "TIME", workDate: entry.workDate, title: "Timer", description: entry.description, quantity: entry.minutes / 60, rateOre: entry.ratePerHourOre, amountOre: Math.round(entry.minutes / 60 * entry.ratePerHourOre) })}>Rediger</button>
             </div>
           ))}
           {extraEntries.map((entry) => (
@@ -1133,6 +1136,7 @@ function OrderDetails({
                   ? `${(entry.amountOre / 100).toLocaleString("nb-NO")} kr`
                   : "Dokumentert"}
               </strong>
+              <button className="secondary" disabled={["INVOICED", "CLOSED", "CANCELLED"].includes(order.status)} onClick={() => setEditingRegistration({ id: entry.id, type: "EXTRA", kind: entry.kind, workDate: entry.workDate, title: entry.title, description: entry.description, quantity: (entry.quantityThousandths ?? 1000) / 1000, rateOre: entry.unitRateOre ?? 0, amountOre: entry.amountOre })}>Rediger</button>
             </div>
           ))}
         </section>
@@ -1148,6 +1152,7 @@ function OrderDetails({
           </p>
         </section>
       )}
+      {editingRegistration && <RegistrationEditModal entry={editingRegistration} orderId={order.id} onClose={() => setEditingRegistration(null)} onSaved={async () => { setEditingRegistration(null); await loadEntries(); }} />}
       {showTime && (
         <TimeModal
           orderId={order.id}
@@ -1487,6 +1492,45 @@ function OrderEntryModal({
   );
 }
 
+function RegistrationEditModal({ entry, orderId, onClose, onSaved }: { entry: EditableRegistration; orderId: string; onClose: () => void; onSaved: () => Promise<void> }) {
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const priced = ["TIME", "LINE"].includes(entry.kind);
+  const financial = !["IMAGE", "DOCUMENT"].includes(entry.kind);
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const raw = Object.fromEntries(new FormData(event.currentTarget).entries());
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/orders/${orderId}/registrations`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: entry.id, type: entry.type, title: raw.title ?? entry.title, workDate: raw.workDate, description: raw.description, quantity: Number(raw.quantity ?? entry.quantity) || 1, rateOre: Math.round(Number(raw.rate ?? entry.rateOre / 100) * 100), amountOre: Math.round(Number(raw.amount ?? entry.amountOre / 100) * 100) }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      if (result.refreshDraft) {
+        const draftResponse = await fetch(`/api/orders/${orderId}/invoice`, { method: "POST" });
+        if (!draftResponse.ok) {
+          setError("Registreringen er lagret, men fakturautkastet ble ikke oppdatert. Lukk vinduet og velg «Lag fakturautkast» på nytt.");
+          return;
+        }
+      }
+      await onSaved();
+    } catch (error) { setError(error instanceof Error ? error.message : "Kunne ikke lagre."); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="modal-backdrop"><section className="entry-modal" role="dialog" aria-modal="true" aria-label="Rediger registrering">
+      <div className="modal-head"><div><h2>Rediger registrering</h2><p>Beløp og satser er eks. MVA. Fakturautkast oppdateres ved lagring.</p></div><button className="icon-button" onClick={onClose} disabled={busy} aria-label="Lukk"><X /></button></div>
+      <form onSubmit={save}><div className="form-grid">
+        <Field label="Arbeidsdato"><input name="workDate" type="date" defaultValue={entry.workDate.slice(0, 10)} required /></Field>
+        {entry.type === "EXTRA" && <Field label="Tittel"><input name="title" defaultValue={entry.title} required /></Field>}
+        {priced && <><Field label={entry.type === "TIME" ? "Antall timer" : "Antall"}><input name="quantity" type="number" min="0.001" step="0.001" max={entry.type === "TIME" ? 24 : 1000000} defaultValue={entry.quantity} required /></Field><Field label="Sats (kr eks. MVA)"><input name="rate" type="number" min="0" step="0.01" defaultValue={entry.rateOre / 100} required /></Field></>}
+        {financial && !priced && <Field label="Totalt beløp (kr eks. MVA)"><input name="amount" type="number" min="0" step="0.01" defaultValue={entry.amountOre / 100} required /></Field>}
+        <Field label="Beskrivelse" wide><textarea name="description" defaultValue={entry.description ?? ""} maxLength={1000} /></Field>
+      </div>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose} disabled={busy}>Avbryt</button><button className="primary" disabled={busy}>{busy ? "Lagrer…" : "Lagre endringer"}</button></div></form>
+    </section></div>
+  );
+}
+
 function TimeModal({
   orderId,
   onClose,
@@ -1497,6 +1541,15 @@ function TimeModal({
   onSaved: () => void;
 }) {
   const [error, setError] = useState("");
+  const [rate, setRate] = useState("");
+  const [loadingRate, setLoadingRate] = useState(true);
+  useEffect(() => {
+    fetch("/api/profile", { cache: "no-store" }).then(async (response) => {
+      const value = await response.json();
+      if (!response.ok) throw new Error("Kunne ikke hente timesatsen. Angi den manuelt.");
+      setRate(value.organization?.defaultHourlyRateOre == null ? "" : String(Number(value.organization.defaultHourlyRateOre) / 100));
+    }).catch((error) => setError(error.message)).finally(() => setLoadingRate(false));
+  }, []);
   const today = new Date().toISOString().slice(0, 10);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1550,13 +1603,16 @@ function TimeModal({
                 required
               />
             </Field>
-            <Field label="Timesats (kr)">
+            <Field label="Timesats (kr eks. MVA)">
               <input
                 name="rateOre"
                 type="number"
                 min="0"
                 step="0.01"
-                defaultValue="790"
+                value={rate}
+                onChange={(event) => setRate(event.target.value)}
+                disabled={loadingRate}
+                placeholder={loadingRate ? "Henter fra profilen…" : "Angi timesats"}
                 required
               />
             </Field>
@@ -1569,7 +1625,7 @@ function TimeModal({
             <button type="button" className="secondary" onClick={onClose}>
               Avbryt
             </button>
-            <button className="primary">Lagre timer</button>
+            <button className="primary" disabled={loadingRate}>Lagre timer</button>
           </div>
         </form>
       </section>
