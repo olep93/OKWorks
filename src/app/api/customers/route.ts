@@ -6,6 +6,7 @@ import { db } from "@/lib/db/client";
 import { customers, invoices } from "@/lib/db/schema";
 
 const inputSchema = z.object({
+  type: z.enum(["PRIVATE", "COMPANY"]).default("COMPANY"),
   name: z.string().trim().min(2),
   organizationNumber: z.string().trim().max(20).optional(),
   email: z.union([z.email(), z.literal("")]).optional(),
@@ -24,7 +25,8 @@ export async function PATCH(request: Request) {
     const customer = await db.transaction(async (tx) => {
       const [updated] = await tx.update(customers).set({
         name: value.name,
-        organizationNumber: value.organizationNumber || null,
+        type: value.type,
+        organizationNumber: value.type === "PRIVATE" ? null : value.organizationNumber || null,
         email: value.email || null,
         phone: value.phone || null,
         address: value.address || null,
@@ -50,7 +52,8 @@ export async function POST(request: Request) {
     const [customer] = await db.insert(customers).values({
       organizationId: user.organizationId,
       name: parsed.data.name,
-      organizationNumber: parsed.data.organizationNumber || null,
+      type: parsed.data.type,
+      organizationNumber: parsed.data.type === "PRIVATE" ? null : parsed.data.organizationNumber || null,
       email: parsed.data.email || null,
       phone: parsed.data.phone || null,
       address: parsed.data.address || null,

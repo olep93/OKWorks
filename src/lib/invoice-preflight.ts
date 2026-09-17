@@ -29,7 +29,7 @@ export function checkInvoicePreflight(input: {
   if (input.lineCount < 1) errors.push("Fakturaen må ha minst én fakturalinje.");
   if (input.totalOre <= 0) errors.push("Fakturabeløpet må være større enn 0 kr.");
 
-  if (!present(customer.organizationNumber)) warnings.push("Kundens organisasjonsnummer er ikke registrert.");
+  if (customer.type !== "PRIVATE" && !present(customer.organizationNumber)) warnings.push("Kundens organisasjonsnummer er ikke registrert.");
   if (!present(customer.email)) warnings.push("Kundens e-post er ikke registrert.");
   if (!present(organization.invoiceEmail) && !present(organization.email)) warnings.push("Firmaets e-post vises ikke på fakturaen.");
   if (!present(organization.invoicePhone) && !present(organization.phone)) warnings.push("Firmaets telefon vises ikke på fakturaen.");

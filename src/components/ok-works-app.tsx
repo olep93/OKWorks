@@ -39,6 +39,7 @@ type User = {
 };
 type Customer = {
   id: string;
+  type: string;
   name: string;
   organizationNumber: string | null;
   email: string | null;
@@ -615,6 +616,7 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
             <InvoiceScreen
               invoiceId={selectedInvoiceId}
               onBack={() => navigate("invoices")}
+              onReset={async (orderId) => { await refresh(); openOrder(orderId); }}
             />
           ) : screen === "customers" ? (
             <Customers
@@ -814,9 +816,7 @@ function Customers({
               <div>
                 <h3>{customer.name}</h3>
                 <p>
-                  {customer.organizationNumber
-                    ? `Org.nr. ${customer.organizationNumber}`
-                    : "Privatkunde"}
+                  {customer.type === "PRIVATE" ? "Privatkunde" : customer.organizationNumber ? `Org.nr. ${customer.organizationNumber}` : "Bedriftskunde"}
                 </p>
                 <span>
                   {customer.email ||
@@ -1827,9 +1827,11 @@ function InvoicesScreen({ onOpen }: { onOpen: (id: string) => void }) {
 function InvoiceScreen({
   invoiceId,
   onBack,
+  onReset,
 }: {
   invoiceId: string;
   onBack: () => void;
+  onReset: (orderId: string) => Promise<void>;
 }) {
   type Preflight = {
     canFinalize: boolean;
@@ -1889,6 +1891,19 @@ function InvoiceScreen({
   >;
   const customer = (invoice.customerSnapshot ?? {}) as Record<string, unknown>;
   const finalized = invoice.status !== "DRAFT";
+  async function resetDraft() {
+    if (busy || !window.confirm("Tilbakestille fakturautkastet til ordre? Utkastet fjernes, men alle timer, linjer, bilder og dokumenter beholdes. Du kan lage et nytt utkast senere.")) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}/reset`, { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Kunne ikke tilbakestille utkastet.");
+      await onReset(result.orderId);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Kunne ikke tilbakestille utkastet.");
+    } finally { setBusy(false); }
+  }
   async function finalize() {
     setBusy(true);
     setError("");
@@ -1971,6 +1986,7 @@ function InvoiceScreen({
           </p>
         </div>
         <div className="invoice-actions">
+          {!finalized && <button className="secondary" disabled={busy} onClick={resetDraft}>{busy ? "Arbeider…" : "Tilbakestill til ordre"}</button>}
           <a className="secondary" href={`/api/invoices/${invoiceId}/pdf`}>
             <Download />
             Last ned PDF
@@ -2961,6 +2977,7 @@ function CreateModal({
 }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [customerType, setCustomerType] = useState(customer?.type === "PRIVATE" ? "PRIVATE" : "COMPANY");
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -3014,12 +3031,18 @@ function CreateModal({
           <div className="form-grid">
             {kind === "customer" ? (
               <>
+                <Field label="Kundetype" wide>
+                  <select name="type" value={customerType} onChange={(event) => setCustomerType(event.target.value)}>
+                    <option value="COMPANY">Bedriftskunde</option>
+                    <option value="PRIVATE">Privatkunde</option>
+                  </select>
+                </Field>
                 <Field label="Kundenavn" wide>
                   <input name="name" defaultValue={customer?.name ?? ""} required />
                 </Field>
-                <Field label="Organisasjonsnummer">
+                {customerType === "COMPANY" && <Field label="Organisasjonsnummer">
                   <input name="organizationNumber" defaultValue={customer?.organizationNumber ?? ""} />
-                </Field>
+                </Field>}
                 <Field label="E-post">
                   <input name="email" type="email" defaultValue={customer?.email ?? ""} />
                 </Field>
