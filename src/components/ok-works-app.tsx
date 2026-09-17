@@ -66,7 +66,7 @@ type AppData = {
 };
 type ProfileData = {
   organization: Record<string, string | number | null>;
-  settings: Record<string, number>;
+  settings: { mileageRateOre: number; dietDayRateOre: number; dietOvernightRateOre: number; hotelMarkupBasisPoints: number; expenseMarkupBasisPoints: number; vehicleName?: string | null; vehicleFuelType?: string; vehicleAutoPass?: boolean };
   products: Array<{
     id: string;
     name: string;
@@ -1259,6 +1259,25 @@ function OrderEntryModal({
   const [routeNote, setRouteNote] = useState("");
   const [tollKnown, setTollKnown] = useState(false);
   const [emissionType, setEmissionType] = useState("GASOLINE");
+  const [vehicleName, setVehicleName] = useState("");
+  const [autoPass, setAutoPass] = useState(false);
+  const [includeReturn, setIncludeReturn] = useState(false);
+  const [returnDate, setReturnDate] = useState(today);
+  const [returnKm, setReturnKm] = useState("");
+  const [returnToll, setReturnToll] = useState("");
+  const [departureTime, setDepartureTime] = useState("08:00");
+  const [returnTime, setReturnTime] = useState("16:00");
+  const [tollProvider, setTollProvider] = useState("GOOGLE");
+  const [returnTollKnown, setReturnTollKnown] = useState(false);
+  useEffect(() => {
+    if (!["DRIVING", "HOTEL"].includes(kind)) return;
+    let cancelled = false;
+    fetch("/api/profile", { cache: "no-store" }).then(async (response) => { const value = await response.json(); if (!response.ok) throw new Error("Kunne ikke hente standardbilen. Velg biltype manuelt."); return value; }).then((value) => {
+      if (cancelled) return;
+      setEmissionType(value.settings?.vehicleFuelType || "GASOLINE"); setVehicleName(value.settings?.vehicleName || ""); setAutoPass(Boolean(value.settings?.vehicleAutoPass));
+    }).catch((error) => { if (!cancelled) setError(error.message); });
+    return () => { cancelled = true; };
+  }, [kind]);
   const financial = !["IMAGE", "DOCUMENT"].includes(kind);
   useEffect(() => {
     if (kind !== "DRIVING") return;
@@ -1266,6 +1285,7 @@ function OrderEntryModal({
     fetch(`/api/orders/${orderId}/route-estimate?date=${workDate}`, { cache: "no-store" })
       .then(async (response) => { const value = await response.json(); if (!response.ok) throw new Error(value.error); return value; })
       .then((value) => { if (cancelled) return;
+        setTollProvider(value.tollProvider || "GOOGLE");
         setRouteNote(value.hotelStay ? "Hotellopphold denne dagen: hotell → kunde er foreslått. Bruk «Bytt retning» for returen." : "Firmaadresse → kundeadresse er foreslått.");
         setRoute((current) => ({
           ...current,
@@ -1289,13 +1309,17 @@ function OrderEntryModal({
         origin: route.origin,
         destination: route.destination,
         emissionType,
+        date: workDate, time: departureTime, autoPass,
+        ...(includeReturn ? { returnTrip: { date: returnDate, time: returnTime } } : {}),
       }),
     });
     const value = await response.json();
     if (!response.ok) setError(value.error ?? "Kunne ikke beregne ruten.");
     else {
       setTollKnown(Boolean(value.tollKnown));
-      setRouteNote(value.tollKnown ? "Avstand og estimert bompengepris er hentet. Kontroller før lagring." : "Google oppga ingen bompengepris. Dette betyr ikke bomfritt: fyll inn beløpet manuelt, også 0 dersom ruten faktisk er bomfri.");
+      setTollProvider(value.source || "GOOGLE");
+      setReturnKm(value.returnRoute ? String(value.returnRoute.distanceKm) : ""); setReturnToll(value.returnRoute?.tollKnown ? String(Number(value.returnRoute.tollOre) / 100) : ""); setReturnTollKnown(Boolean(value.returnRoute?.tollKnown));
+      setRouteNote(value.tollKnown && (!includeReturn || value.returnRoute?.tollKnown) ? `Avstand og pris er hentet fra ${value.source === "DIB" ? "DIB (bom og eventuell ferje)" : "Google"}. Kontroller før lagring.` : "Leverandøren oppga ikke alle bompengeprisene. Dette betyr ikke bomfritt: fyll inn manglende beløp manuelt, også 0 dersom ruten faktisk er bomfri.");
       setRoute((current) => ({
         ...current,
         km: String(value.distanceKm),
@@ -1314,8 +1338,8 @@ function OrderEntryModal({
     const form = new FormData(event.currentTarget);
     form.set("kind", kind);
     form.set("requestId", requestId);
-    if (kind === "HOTEL") { form.set("startDate", workDate); form.set("autoTravel", String(autoTravel)); form.set("metadata", JSON.stringify({ emissionType })); }
-    if (kind === "DRIVING") form.set("metadata", JSON.stringify({ origin: route.origin, destination: route.destination, tollKnown: true, tollSource: tollKnown ? "GOOGLE_ESTIMATE" : "MANUAL", tollOre: Math.round(Number(route.toll) * 100) }));
+    if (kind === "HOTEL") { form.set("startDate", workDate); form.set("autoTravel", String(autoTravel)); form.set("metadata", JSON.stringify({ emissionType, vehicleName, autoPass })); }
+    if (kind === "DRIVING") form.set("metadata", JSON.stringify({ origin: route.origin, destination: route.destination, emissionType, vehicleName, autoPass, departureTime, tollKnown: true, tollSource: tollKnown ? tollProvider === "DIB" ? "DIB" : "GOOGLE_ESTIMATE" : "MANUAL", tollOre: Math.round(Number(route.toll) * 100), ...(includeReturn ? { returnTrip: { date: returnDate, quantity: Number(returnKm), tollOre: Math.round(Number(returnToll) * 100), tollSource: returnTollKnown ? tollProvider === "DIB" ? "DIB" : "GOOGLE_ESTIMATE" : "MANUAL" } } : {}) }));
     let body: BodyInit;
     const headers: HeadersInit = {};
     if (financial) {
@@ -1406,7 +1430,7 @@ function OrderEntryModal({
                 name="workDate"
                 type="date"
                 value={workDate}
-                onChange={(event) => { setWorkDate(event.target.value); if (hotelEnd < event.target.value) setHotelEnd(event.target.value); }}
+                onChange={(event) => { setWorkDate(event.target.value); if (hotelEnd < event.target.value) setHotelEnd(event.target.value); if (returnDate < event.target.value) setReturnDate(event.target.value); setReturnKm(""); setReturnToll(""); }}
                 required
               />
             </Field>
@@ -1478,7 +1502,7 @@ function OrderEntryModal({
                   <input
                     value={route.origin}
                     onChange={(event) =>
-                      { setRoute({ ...route, origin: event.target.value, km: "", toll: "" }); setTollKnown(false); }
+                      { setRoute({ ...route, origin: event.target.value, km: "", toll: "" }); setTollKnown(false); setReturnKm(""); setReturnToll(""); }
                     }
                     required
                   />
@@ -1487,29 +1511,33 @@ function OrderEntryModal({
                   <input
                     value={route.destination}
                     onChange={(event) =>
-                      { setRoute({ ...route, destination: event.target.value, km: "", toll: "" }); setTollKnown(false); }
+                      { setRoute({ ...route, destination: event.target.value, km: "", toll: "" }); setTollKnown(false); setReturnKm(""); setReturnToll(""); }
                     }
                     required
                   />
                 </Field>
                 <div className="route-action wide">
-                  <button type="button" className="secondary" onClick={() => { setRoute({ ...route, origin: route.destination, destination: route.origin, km: "", toll: "" }); setTollKnown(false); }}>Bytt retning</button>
+                  <button type="button" className="secondary" onClick={() => { setRoute({ ...route, origin: route.destination, destination: route.origin, km: "", toll: "" }); setTollKnown(false); setReturnKm(""); setReturnToll(""); }}>Bytt retning</button>
                   <button
                     type="button"
                     className="secondary"
                     onClick={calculateRoute}
                     disabled={routeBusy || !route.configured}
                   >
-                    {routeBusy ? "Beregner…" : "Beregn med Google Maps"}
+                    {routeBusy ? "Beregner…" : includeReturn ? "Beregn tur og retur" : "Beregn kjøring"}
                   </button>
                   <span>
                     {route.configured
-                      ? "Avstand beregnes. Bompenger hentes når Google har prisdata."
-                      : "Google Maps er ikke aktivert i denne deployen."}
+                      ? tollProvider === "DIB" ? "DIB beregner avstand, bompenger og eventuell ferje." : "Google beregner avstand. DIBs norske bompenge-API er ikke aktivert ennå."
+                      : "Ruteberegning er ikke aktivert i denne deployen."}
                   </span>
                 </div>
                 {routeNote && <p className="wide" role="status">{routeNote}</p>}
-                <Field label="Biltype"><select value={emissionType} onChange={(event) => { setEmissionType(event.target.value); setRoute({ ...route, toll: "" }); setTollKnown(false); }}><option value="GASOLINE">Bensin</option><option value="DIESEL">Diesel</option><option value="ELECTRIC">Elektrisk</option><option value="HYBRID">Hybrid</option></select></Field>
+                {vehicleName && <p className="wide">Standardbil: {vehicleName}. Biltypen kan overstyres for denne reisen.</p>}
+                <Field label="Avreise kl."><input type="time" value={departureTime} onChange={(event) => { setDepartureTime(event.target.value); setRoute({ ...route, toll: "" }); }} required /></Field>
+                <label className="wide"><input type="checkbox" checked={autoPass} onChange={(event) => { setAutoPass(event.target.checked); setRoute({ ...route, toll: "" }); setReturnToll(""); }} /> Bruk AutoPASS-pris når DIB er aktivert</label>
+                <label className="wide"><input type="checkbox" checked={includeReturn} onChange={(event) => { setIncludeReturn(event.target.checked); setReturnKm(""); setReturnToll(""); }} /> Legg til retur (egen kjørelinje)</label>
+                <Field label="Biltype"><select value={emissionType} onChange={(event) => { setEmissionType(event.target.value); setRoute({ ...route, toll: "" }); setTollKnown(false); setReturnToll(""); }}><option value="GASOLINE">Bensin</option><option value="DIESEL">Diesel</option><option value="ELECTRIC">Elbil</option><option value="HYBRID">Ladbar hybrid</option></select></Field>
                 <Field label="Kilometer">
                   <input
                     name="quantity"
@@ -1534,7 +1562,7 @@ function OrderEntryModal({
                     required
                   />
                 </Field>
-                <Field label="Bompenger (kr)">
+                <Field label="Bompenger / ferje (kr)">
                   <input
                     name="tollOre"
                     type="number"
@@ -1547,6 +1575,14 @@ function OrderEntryModal({
                     }
                   />
                 </Field>
+                {includeReturn && <>
+                  <Field label="Returdato"><input type="date" min={workDate} value={returnDate} onChange={(event) => { setReturnDate(event.target.value); setReturnToll(""); }} required /></Field>
+                  <Field label="Retur kl."><input type="time" value={returnTime} onChange={(event) => { setReturnTime(event.target.value); setReturnToll(""); }} required /></Field>
+                  <Field label="Kilometer retur"><input type="number" min="0" step="0.1" value={returnKm} onChange={(event) => setReturnKm(event.target.value)} required /></Field>
+                  <Field label="Bompenger / ferje retur (kr)"><input type="number" min="0" step="0.01" value={returnToll} onChange={(event) => { setReturnToll(event.target.value); setReturnTollKnown(false); }} required /></Field>
+                  <p className="wide">Returen beregnes separat; avstand og bompenger kan være annerledes enn på utreisen. Samme km-sats brukes begge veier.</p>
+                </>}
+                <a className="secondary wide" href="https://bompengekalkulator.no/" target="_blank" rel="noopener noreferrer">Åpne bompengekalkulator for manuell kontroll</a>
                 <input type="hidden" name="unit" value="km" />
               </>
             )}
@@ -2679,6 +2715,7 @@ function SettingsScreen({
     event.preventDefault();
     setError("");
     const raw = Object.fromEntries(new FormData(event.currentTarget).entries());
+    raw.vehicleAutoPass = String(new FormData(event.currentTarget).has("vehicleAutoPass"));
     const ore = [
       "defaultHourlyRateOre",
       "mileageRateOre",
@@ -2848,6 +2885,9 @@ function SettingsScreen({
                 defaultValue={Number(org.defaultHourlyRateOre ?? 0) / 100}
               />
             </Field>
+            <Field label="Standardbil (navn / registreringsnummer)" wide><input name="vehicleName" maxLength={120} defaultValue={settings.vehicleName ?? ""} placeholder="F.eks. firmabil AB12345" /></Field>
+            <Field label="Bilens drivstofftype"><select name="vehicleFuelType" defaultValue={settings.vehicleFuelType || "GASOLINE"}><option value="GASOLINE">Bensin</option><option value="DIESEL">Diesel</option><option value="ELECTRIC">Elbil</option><option value="HYBRID">Ladbar hybrid</option></select></Field>
+            <label className="wide"><input type="checkbox" name="vehicleAutoPass" defaultChecked={Boolean(settings.vehicleAutoPass)} /> Bilen har AutoPASS-avtale</label>
             <Field label="Kilometersats (kr)">
               <input
                 name="mileageRateOre"

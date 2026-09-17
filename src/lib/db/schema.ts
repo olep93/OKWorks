@@ -39,6 +39,9 @@ export const organizations = pgTable("organizations", {
 
 export const organizationSettings = pgTable("organization_settings", {
   organizationId: uuid("organization_id").primaryKey().references(() => organizations.id, { onDelete: "cascade" }),
+  vehicleName: varchar("vehicle_name", { length: 120 }),
+  vehicleFuelType: varchar("vehicle_fuel_type", { length: 16 }).notNull().default("GASOLINE"),
+  vehicleAutoPass: boolean("vehicle_auto_pass").notNull().default(false),
   mileageRateOre: bigint("mileage_rate_ore", { mode: "number" }).notNull().default(500),
   dietDayRateOre: bigint("diet_day_rate_ore", { mode: "number" }).notNull().default(0),
   dietOvernightRateOre: bigint("diet_overnight_rate_ore", { mode: "number" }).notNull().default(0),

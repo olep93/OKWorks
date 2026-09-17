@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { invoices, orderEntries, orders, organizations, organizationSettings } from "@/lib/db/schema";
-import { computeDrivingRoute } from "@/lib/google-route";
+import { computeTravelRoutes } from "@/lib/travel-route";
 import { fullAddress, hotelStay, validDate } from "@/lib/travel";
 
 const kinds = ["LINE", "DRIVING", "EXPENSE", "HOTEL", "IMAGE", "DOCUMENT"] as const;
@@ -34,18 +34,21 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       fileData = new Uint8Array(await file.arrayBuffer()); mimeType = file.type; fileSize = file.size; fileName = file.name;
     }
     const stay = value.kind === "HOTEL" ? hotelStay(value) : null;
+    const returnInput = value.kind === "DRIVING" && value.metadata?.returnTrip ? z.object({ date: z.string().refine(validDate), quantity: z.number().min(0).max(1000000), tollOre: z.number().int().min(0).max(100000000), tollSource: z.enum(["DIB", "GOOGLE_ESTIMATE", "MANUAL"]).optional() }).safeParse(value.metadata.returnTrip) : null;
+    if (returnInput && (!returnInput.success || returnInput.data.date < value.workDate)) return NextResponse.json({ error: "Kontroller returdato, kilometer og bompenger." }, { status: 400 });
     if (value.kind === "HOTEL" && !stay) return NextResponse.json({ error: "Angi hotelladresse og gyldig fra–til-dato." }, { status: 400 });
-    let trips: Array<{ origin: string; destination: string; date: string; distanceKm: number; tollOre: number | null; tollKnown: boolean }> = [];
+    let trips: Array<{ origin: string; destination: string; date: string; distanceKm: number; tollOre: number | null; tollKnown: boolean; source: string }> = [];
     let mileageRateOre = 0;
     if (stay && value.autoTravel) {
       const [[org], [settings]] = await Promise.all([db.select().from(organizations).where(eq(organizations.id, user.organizationId)).limit(1), db.select().from(organizationSettings).where(eq(organizationSettings.organizationId, user.organizationId)).limit(1)]);
       const companyAddress = fullAddress(org ?? {});
       if (!org?.address?.trim()) return NextResponse.json({ error: "Legg inn firmaadressen i profilen før automatisk hotellkjøring." }, { status: 400 });
-      const emissionType = z.enum(["GASOLINE", "DIESEL", "HYBRID", "ELECTRIC"]).safeParse(value.metadata?.emissionType || "GASOLINE");
+      const emissionType = z.enum(["GASOLINE", "DIESEL", "HYBRID", "ELECTRIC"]).safeParse(value.metadata?.emissionType || settings?.vehicleFuelType || "GASOLINE");
       if (!emissionType.success) return NextResponse.json({ error: "Velg en gyldig biltype." }, { status: 400 });
       mileageRateOre = settings?.mileageRateOre ?? 500;
       try {
-        const [outbound, inbound] = await Promise.all([computeDrivingRoute(companyAddress, stay.hotelAddress, emissionType.data), computeDrivingRoute(stay.hotelAddress, companyAddress, emissionType.data)]);
+        const outbound = await computeTravelRoutes(companyAddress, stay.hotelAddress, emissionType.data, stay.startDate, "08:00", typeof value.metadata?.autoPass === "boolean" ? value.metadata.autoPass : settings?.vehicleAutoPass ?? false, { date: stay.endDate, time: "16:00" });
+        const inbound = outbound.returnRoute!;
         trips = [{ origin: companyAddress, destination: stay.hotelAddress, date: stay.startDate, ...outbound }, { origin: stay.hotelAddress, destination: companyAddress, date: stay.endDate, ...inbound }];
       } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Kunne ikke beregne hotellkjøring. Ingenting ble lagret." }, { status: 422 }); }
     }
@@ -67,7 +70,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         if (hotels.some((row) => { const other = hotelStay(row.metadata); return other && stay.startDate <= other.endDate && stay.endDate >= other.startDate; })) throw new Error("HOTEL_OVERLAP");
       }
       const [created] = await tx.insert(orderEntries).values({ organizationId: user.organizationId, orderId: id, createdBy: user.id, kind: value.kind, workDate: new Date(`${stay?.startDate ?? value.workDate}T12:00:00.000Z`), title: value.title, description: value.description || null, quantityThousandths, unit: value.unit || null, unitRateOre: value.unitRateOre ?? null, amountOre, fileName, mimeType, fileSize, fileData, metadata: { ...value.metadata, ...stay, requestId: value.requestId }, billingStatus: value.kind === "IMAGE" || value.kind === "DOCUMENT" ? "NON_BILLABLE" : "UNBILLED" }).returning({ id: orderEntries.id, kind: orderEntries.kind, title: orderEntries.title });
-      if (trips.length) await tx.insert(orderEntries).values(trips.map((trip, index) => ({ organizationId: user.organizationId, orderId: id, createdBy: user.id, kind: "DRIVING", workDate: new Date(`${trip.date}T12:00:00Z`), title: `${index === 0 ? "Utreise" : "Hjemreise"}: ${trip.origin} – ${trip.destination}`.slice(0, 240), description: `Hotellopphold: ${value.title}. ${trip.tollKnown ? "Bompenger fra Google-estimat." : "Bompenger er ukjent og må registreres manuelt før fakturering."}`, quantityThousandths: Math.round(trip.distanceKm * 1000), unit: "km", unitRateOre: mileageRateOre, amountOre: Math.round(trip.distanceKm * mileageRateOre) + (trip.tollOre ?? 0), metadata: { hotelEntryId: created.id, origin: trip.origin, destination: trip.destination, tollOre: trip.tollOre, tollKnown: trip.tollKnown, autoGenerated: true }, billingStatus: "UNBILLED" as const })));
+      if (returnInput?.success) {
+        const returning = returnInput.data;
+        await tx.insert(orderEntries).values({ organizationId: user.organizationId, orderId: id, createdBy: user.id, kind: "DRIVING", workDate: new Date(`${returning.date}T12:00:00Z`), title: `Retur: ${String(value.metadata?.destination || "")} – ${String(value.metadata?.origin || "")}`.slice(0, 240), description: value.description || null, quantityThousandths: Math.round(returning.quantity * 1000), unit: "km", unitRateOre: value.unitRateOre ?? 0, amountOre: Math.round(returning.quantity * (value.unitRateOre ?? 0)) + returning.tollOre, metadata: { origin: value.metadata?.destination, destination: value.metadata?.origin, outboundEntryId: created.id, emissionType: value.metadata?.emissionType, vehicleName: value.metadata?.vehicleName, tollKnown: true, tollOre: returning.tollOre, tollSource: returning.tollSource ?? "MANUAL" }, billingStatus: "UNBILLED" });
+      }
+      if (trips.length) await tx.insert(orderEntries).values(trips.map((trip, index) => ({ organizationId: user.organizationId, orderId: id, createdBy: user.id, kind: "DRIVING", workDate: new Date(`${trip.date}T12:00:00Z`), title: `${index === 0 ? "Utreise" : "Hjemreise"}: ${trip.origin} – ${trip.destination}`.slice(0, 240), description: `Hotellopphold: ${value.title}. ${trip.tollKnown ? (trip.source === "DIB" ? "Bompenger og ferje fra DIB-estimat." : "Bompenger fra Google-estimat.") : "Bompenger er ukjent og må registreres manuelt før fakturering."}`, quantityThousandths: Math.round(trip.distanceKm * 1000), unit: "km", unitRateOre: mileageRateOre, amountOre: Math.round(trip.distanceKm * mileageRateOre) + (trip.tollOre ?? 0), metadata: { hotelEntryId: created.id, origin: trip.origin, destination: trip.destination, tollOre: trip.tollOre, tollKnown: trip.tollKnown, tollSource: trip.source === "DIB" ? "DIB" : "GOOGLE_ESTIMATE", emissionType: value.metadata?.emissionType, vehicleName: value.metadata?.vehicleName, autoPass: value.metadata?.autoPass, autoGenerated: true }, billingStatus: "UNBILLED" as const })));
       return created;
     });
     return NextResponse.json({ entry, tripsAdded: trips.length, tollNeedsReview: trips.some((trip) => !trip.tollKnown) }, { status: 201 });
