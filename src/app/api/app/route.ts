@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { customers, orders, organizations } from "@/lib/db/schema";
+import { organizationOnboarding } from "@/lib/onboarding";
 
 export async function GET() {
   try {
@@ -33,28 +34,10 @@ export async function GET() {
         .limit(1),
     ]);
     const organization = organizationRows[0];
-    const required = [
-      organization?.name,
-      organization?.organizationNumber,
-      organization?.email,
-      organization?.address,
-      organization?.postalCode,
-      organization?.city,
-      organization?.bankAccount,
-      organization?.defaultHourlyRateOre,
-    ];
-    const completed = required.filter(
-      (value) =>
-        value !== null && value !== undefined && String(value).trim() !== "",
-    ).length;
     return NextResponse.json({
       customers: customerRows,
       orders: orderRows,
-      onboarding: {
-        complete: completed === required.length,
-        completed,
-        total: required.length,
-      },
+      onboarding: organizationOnboarding(organization),
     });
   } catch {
     return NextResponse.json({ error: "Ikke innlogget." }, { status: 401 });

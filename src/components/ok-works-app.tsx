@@ -63,7 +63,7 @@ type Order = {
 type AppData = {
   customers: Customer[];
   orders: Order[];
-  onboarding?: { complete: boolean; completed: number; total: number };
+  onboarding?: { complete: boolean; completed: number; total: number; missing?: string[] };
 };
 type ProfileData = {
   organization: Record<string, string | number | null>;
@@ -2672,7 +2672,7 @@ function SettingsScreen({
   onboarding,
 }: {
   onSaved: (message: string) => void;
-  onboarding?: { complete: boolean; completed: number; total: number };
+  onboarding?: { complete: boolean; completed: number; total: number; missing?: string[] };
 }) {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
@@ -2806,8 +2806,7 @@ function SettingsScreen({
             <p className="eyebrow">Førstegangsoppsett</p>
             <h2>Gjør firmaet klart for første faktura</h2>
             <span>
-              Fyll inn organisasjonsnummer, kontaktinformasjon, adresse,
-              bankkonto og timesats. Du kan endre alt senere.
+              {onboarding.missing?.length ? `Gjenstår: ${onboarding.missing.join(", ")}.` : "Fyll inn organisasjonsnummer, kontaktinformasjon, adresse, bankkonto og timesats."} Du kan lagre underveis og endre opplysningene senere.
             </span>
           </div>
           <strong>
