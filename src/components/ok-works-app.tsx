@@ -1258,6 +1258,20 @@ function OrderEntryModal({
   const [workDate, setWorkDate] = useState(today);
   const [hotelEnd, setHotelEnd] = useState(today);
   const [hotelAddress, setHotelAddress] = useState("");
+  const [hotelQuery, setHotelQuery] = useState("");
+  const [hotelResults, setHotelResults] = useState<Array<{ id: string; name: string; address: string }>>([]);
+  const [hotelSearchBusy, setHotelSearchBusy] = useState(false);
+  const [hotelSearchMessage, setHotelSearchMessage] = useState("");
+  async function searchHotels() {
+    setHotelSearchBusy(true); setHotelSearchMessage(""); setHotelResults([]);
+    try {
+      const response = await fetch("/api/places/hotels", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: hotelQuery }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setHotelResults(data.hotels); if (!data.hotels.length) setHotelSearchMessage("Ingen hotell funnet. Prøv navn og sted, eller skriv adressen manuelt.");
+    } catch (error) { setHotelSearchMessage(error instanceof Error ? error.message : "Hotellsøk feilet."); }
+    finally { setHotelSearchBusy(false); }
+  }
   const [autoTravel, setAutoTravel] = useState(true);
   const [routeNote, setRouteNote] = useState("");
   const [tollKnown, setTollKnown] = useState(false);
@@ -1467,6 +1481,7 @@ function OrderEntryModal({
               />
             </Field>
             {kind === "HOTEL" && <>
+              <Field label="Søk hotellnavn" wide><input value={hotelQuery} onChange={(event) => { setHotelQuery(event.target.value); setHotelResults([]); }} placeholder="F.eks. Runway Gardermoen" disabled={hotelSearchBusy} /><button type="button" className="secondary" disabled={hotelSearchBusy || hotelQuery.trim().length < 3} onClick={() => void searchHotels()}>{hotelSearchBusy ? "Søker…" : "Finn hotell"}</button>{hotelSearchMessage && <small role="status">{hotelSearchMessage}</small>}{hotelResults.map((hotel) => <button key={hotel.id} type="button" className="secondary" onClick={() => { setHotelAddress(hotel.address); setHotelQuery(hotel.name); setHotelResults([]); setHotelSearchMessage(`Valgt: ${hotel.name}. Adressen er fylt inn.`); }}><span>{hotel.name}<br /><small>{hotel.address}</small></span></button>)}<small>Hotellsøk fra Google Maps</small></Field>
               <Field label="Til dato (hjemreise)"><input name="endDate" type="date" min={workDate} value={hotelEnd} onChange={(event) => setHotelEnd(event.target.value)} required /></Field>
               <Field label="Hotelladresse" wide><input name="hotelAddress" value={hotelAddress} onChange={(event) => setHotelAddress(event.target.value)} maxLength={500} placeholder="Gateadresse, postnummer og sted" required />{hotelAddress.trim() && <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hotelAddress)}`} target="_blank" rel="noreferrer">Kontroller hotellet i Google Maps</a>}<small>Søk opp hotellet i Maps og bruk full gateadresse her. Automatisk hotellkjøring bruker denne adressen.</small></Field>
               <Field label="Biltype for hotellreisen"><select value={emissionType} onChange={(event) => setEmissionType(event.target.value)}><option value="GASOLINE">Bensin</option><option value="DIESEL">Diesel</option><option value="ELECTRIC">Elektrisk</option><option value="HYBRID">Hybrid</option></select></Field>
