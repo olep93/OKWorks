@@ -13,11 +13,12 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
       if (!invoice) return { status: 404, body: { error: "Fakturaen finnes ikke." } };
       if (invoice.status !== "DRAFT") return { status: 200, body: { invoice, alreadyFinalized: true } };
 
-      const [lineCountRows, documentCountRows] = await Promise.all([
+      const [lineCountRows, documentCountRows, tollCountRows] = await Promise.all([
         tx`SELECT count(*)::int AS count FROM invoice_lines WHERE invoice_id = ${id} AND organization_id = ${user.organizationId}`,
         tx`SELECT count(*)::int AS count FROM order_entries WHERE order_id = ${invoice.source_order_id} AND organization_id = ${user.organizationId} AND kind IN ('IMAGE', 'DOCUMENT')`,
+        tx`SELECT count(*)::int AS count FROM order_entries WHERE order_id = ${invoice.source_order_id} AND organization_id = ${user.organizationId} AND kind = 'DRIVING' AND metadata->>'tollKnown' = 'false'`,
       ]);
-      const preflight = checkInvoicePreflight({ status: invoice.status, totalOre: Number(invoice.total_ore), organization: invoice.organization_snapshot as Record<string, unknown>, customer: invoice.customer_snapshot as Record<string, unknown>, lineCount: Number(lineCountRows[0]?.count ?? 0), documentationCount: Number(documentCountRows[0]?.count ?? 0) });
+      const preflight = checkInvoicePreflight({ status: invoice.status, totalOre: Number(invoice.total_ore), organization: invoice.organization_snapshot as Record<string, unknown>, customer: invoice.customer_snapshot as Record<string, unknown>, lineCount: Number(lineCountRows[0]?.count ?? 0), documentationCount: Number(documentCountRows[0]?.count ?? 0), unresolvedTollCount: Number(tollCountRows[0]?.count ?? 0) });
       if (!preflight.canFinalize) return { status: 400, body: { error: "Fakturaen er ikke klar for finalisering.", preflight } };
 
       await tx`INSERT INTO invoice_sequences (organization_id, next_number) VALUES (${user.organizationId}, 1001) ON CONFLICT (organization_id) DO NOTHING`;

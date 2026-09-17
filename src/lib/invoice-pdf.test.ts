@@ -24,4 +24,15 @@ describe("invoice PDF", () => {
     const bytes = await buildInvoicePdf(invoice, lines, [{ title: "Ferdig arbeid", description: "Dokumentasjon", workDate: "2026-09-15", fileName: "ferdig.png", mimeType: "image/png", fileData: png }]);
     expect((await PDFDocument.load(bytes)).getPageCount()).toBe(2);
   });
+  it("paginates long descriptions and large formatted totals", async () => {
+    const many = Array.from({ length: 25 }, () => ({ ...lines[0], description: "Utført arbeid med dokumentasjon og materialer. ".repeat(8), subtotalOre: 123456750 }));
+    const bytes = await buildInvoicePdf({ ...invoice, subtotalOre: 3086418750, vatAmountOre: 771604688, totalOre: 3858023438 }, many);
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.getPageCount()).toBeGreaterThan(2);
+    expect(pdf.getPages().every((page) => page.getWidth() === 595.28)).toBe(true);
+  });
+  it("adds financial documentation even without images", async () => {
+    const bytes = await buildInvoicePdf(invoice, lines, [], [{ kind: "HOTEL", title: "Hotell", description: "Opphold", workDate: "2026-09-17", fileName: null, mimeType: null, fileData: null, amountOre: 10000, metadata: { hotelAddress: "Gate 1", startDate: "2026-09-17", endDate: "2026-09-20" } }]);
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(2);
+  });
 });

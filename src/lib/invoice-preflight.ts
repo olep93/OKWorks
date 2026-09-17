@@ -13,6 +13,7 @@ export function checkInvoicePreflight(input: {
   customer: Snapshot;
   lineCount: number;
   documentationCount?: number;
+  unresolvedTollCount?: number;
 }): InvoicePreflight {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -28,6 +29,7 @@ export function checkInvoicePreflight(input: {
   if (!present(customer.address)) errors.push("Kunden mangler fakturaadresse.");
   if (input.lineCount < 1) errors.push("Fakturaen må ha minst én fakturalinje.");
   if (input.totalOre <= 0) errors.push("Fakturabeløpet må være større enn 0 kr.");
+  if (input.unresolvedTollCount) errors.push("Kjøring har ukjente bompenger. Rediger kjørelinjene og angi beløp, eller 0 dersom ruten er bomfri.");
 
   if (customer.type !== "PRIVATE" && !present(customer.organizationNumber)) warnings.push("Kundens organisasjonsnummer er ikke registrert.");
   if (!present(customer.email)) warnings.push("Kundens e-post er ikke registrert.");

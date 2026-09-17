@@ -4,8 +4,9 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { invoices, orderEntries, orders, timeEntries } from "@/lib/db/schema";
+import { hotelStay } from "@/lib/travel";
 
-const input = z.object({ id: z.uuid(), type: z.enum(["TIME", "EXTRA"]), workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), description: z.string().trim().max(1000), title: z.string().trim().min(1).max(240), quantity: z.number().min(0).max(1000000), rateOre: z.number().int().min(0), amountOre: z.number().int().min(0) });
+const input = z.object({ id: z.uuid(), type: z.enum(["TIME", "EXTRA"]), workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), description: z.string().trim().max(1000), title: z.string().trim().min(1).max(240), quantity: z.number().min(0).max(1000000), rateOre: z.number().int().min(0).max(100000000), amountOre: z.number().int().min(0).max(100000000000), tollOre: z.number().int().min(0).max(100000000).optional() });
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -32,7 +33,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         const [entry] = await tx.select().from(orderEntries).where(scope);
         if (!entry || entry.billingStatus === "INVOICED") return { status: 404, body: { error: "Registreringen finnes ikke eller er låst." } };
         const financial = !["IMAGE", "DOCUMENT"].includes(entry.kind);
-        await tx.update(orderEntries).set({ workDate, title: value.title, description: value.description || null, ...(entry.kind === "LINE" ? { quantityThousandths: Math.round(value.quantity * 1000), unitRateOre: value.rateOre, amountOre: Math.round(value.quantity * value.rateOre) } : financial ? { amountOre: value.amountOre } : {}), updatedAt: new Date() }).where(scope);
+        const stay = entry.kind === "HOTEL" ? hotelStay(entry.metadata) : null;
+        if (stay && value.workDate !== stay.startDate) return { status: 400, body: { error: "Hotellperioden kan ikke flyttes ved beløpsredigering, siden reisene hører til denne perioden." } };
+        if (entry.kind === "DRIVING" && value.tollOre == null) return { status: 400, body: { error: "Angi bompenger, eller 0 dersom ruten er bomfri." } };
+        await tx.update(orderEntries).set({ workDate, title: value.title, description: value.description || null, ...(["LINE", "DRIVING"].includes(entry.kind) ? { quantityThousandths: Math.round(value.quantity * 1000), unitRateOre: value.rateOre, amountOre: Math.round(value.quantity * value.rateOre) + (entry.kind === "DRIVING" ? value.tollOre ?? 0 : 0), ...(entry.kind === "DRIVING" ? { metadata: { ...(entry.metadata as Record<string, unknown> | null), tollOre: value.tollOre, tollKnown: true, tollSource: "MANUAL" } } : {}) } : financial ? { amountOre: value.amountOre } : {}), updatedAt: new Date() }).where(scope);
       }
       return { status: 200, body: { ok: true, refreshDraft: invoiceRows.length > 0 } };
     });

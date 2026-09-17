@@ -86,6 +86,7 @@ export async function POST(
           fileName: orderEntries.fileName,
           mimeType: orderEntries.mimeType,
           fileData: orderEntries.fileData,
+          metadata: orderEntries.metadata,
         })
         .from(orderEntries)
         .where(

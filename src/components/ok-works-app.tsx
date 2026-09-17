@@ -30,6 +30,7 @@ import {
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { formatBankAccount } from "@/lib/bank-account-format";
+import { formatMoney, formatQuantity, formatDate, localDate } from "@/lib/format";
 
 type User = {
   id: string;
@@ -111,8 +112,9 @@ type ExtraEntry = {
   fileName: string | null;
   mimeType?: string | null;
   fileSize?: number | null;
+  metadata?: Record<string, unknown> | null;
 };
-type EditableRegistration = { id: string; type: "TIME" | "EXTRA"; kind: string; workDate: string; title: string; description: string | null; quantity: number; rateOre: number; amountOre: number; fileName?: string | null; mimeType?: string | null };
+type EditableRegistration = { id: string; type: "TIME" | "EXTRA"; kind: string; workDate: string; title: string; description: string | null; quantity: number; rateOre: number; amountOre: number; fileName?: string | null; mimeType?: string | null; metadata?: Record<string, unknown> | null };
 const orderStatusLabel = (status: string) =>
   status === "INVOICED"
     ? "Fakturert · ubetalt"
@@ -1052,7 +1054,7 @@ function OrderDetails({
           </div>
           <div className="order-amount">
             <span>Registrert fakturerbart</span>
-            <strong>{(totalOre / 100).toLocaleString("nb-NO")} kr</strong>
+            <strong>{formatMoney(totalOre)}</strong>
             <button
               className="primary invoice-button"
               onClick={createInvoice}
@@ -1117,7 +1119,7 @@ function OrderDetails({
               <div>
                 <b>
                   <Clock3 />
-                  {(entry.minutes / 60).toLocaleString("nb-NO")} timer
+                  {formatQuantity(entry.minutes / 60)} timer
                 </b>
                 <span>
                   {new Date(entry.workDate).toLocaleDateString("nb-NO")} ·{" "}
@@ -1125,11 +1127,7 @@ function OrderDetails({
                 </span>
               </div>
               <strong>
-                {(
-                  ((entry.minutes / 60) * entry.ratePerHourOre) /
-                  100
-                ).toLocaleString("nb-NO")}{" "}
-                kr
+                {formatMoney(Math.round(entry.minutes / 60 * entry.ratePerHourOre))}
               </strong>
               <button className="secondary" disabled={["INVOICED", "CLOSED", "CANCELLED"].includes(order.status)} onClick={() => setEditingRegistration({ id: entry.id, type: "TIME", kind: "TIME", workDate: entry.workDate, title: "Timer", description: entry.description, quantity: entry.minutes / 60, rateOre: entry.ratePerHourOre, amountOre: Math.round(entry.minutes / 60 * entry.ratePerHourOre) })}>Rediger</button>
             </div>
@@ -1141,12 +1139,14 @@ function OrderDetails({
                 <span>
                   {new Date(entry.workDate).toLocaleDateString("nb-NO")} ·{" "}
                   {entry.description || entry.fileName || "Registrert"}
+                  {entry.kind === "HOTEL" && entry.metadata?.endDate ? ` · Opphold til ${formatDate(String(entry.metadata.endDate))}` : ""}
+                  {entry.kind === "DRIVING" && entry.metadata?.tollKnown === false ? " · Bompenger må registreres" : ""}
                 </span>
               </div>
               <strong>
                 {entry.amountOre
-                  ? `${(entry.amountOre / 100).toLocaleString("nb-NO")} kr`
-                  : "Dokumentert"}
+                  ? formatMoney(entry.amountOre)
+                  : ["IMAGE", "DOCUMENT"].includes(entry.kind) ? "Dokumentert" : formatMoney(0)}
               </strong>
               <button className="secondary" disabled={["INVOICED", "CLOSED", "CANCELLED"].includes(order.status)} onClick={() => setEditingRegistration({ ...entry, type: "EXTRA", quantity: (entry.quantityThousandths ?? 1000) / 1000, rateOre: entry.unitRateOre ?? 0 })}>Rediger</button>
             </div>
@@ -1231,48 +1231,72 @@ function OrderEntryModal({
     configured: false,
   });
   const [routeBusy, setRouteBusy] = useState(false);
-  const today = new Date().toISOString().slice(0, 10);
+  const [saving, setSaving] = useState(false);
+  const [requestId] = useState(() => crypto.randomUUID());
+  const today = localDate();
+  const [workDate, setWorkDate] = useState(today);
+  const [hotelEnd, setHotelEnd] = useState(today);
+  const [autoTravel, setAutoTravel] = useState(true);
+  const [routeNote, setRouteNote] = useState("");
+  const [tollKnown, setTollKnown] = useState(false);
+  const [emissionType, setEmissionType] = useState("GASOLINE");
   const financial = !["IMAGE", "DOCUMENT"].includes(kind);
   useEffect(() => {
     if (kind !== "DRIVING") return;
-    fetch(`/api/orders/${orderId}/route-estimate`, { cache: "no-store" })
-      .then((response) => response.json())
-      .then((value) =>
+    let cancelled = false;
+    fetch(`/api/orders/${orderId}/route-estimate?date=${workDate}`, { cache: "no-store" })
+      .then(async (response) => { const value = await response.json(); if (!response.ok) throw new Error(value.error); return value; })
+      .then((value) => { if (cancelled) return;
+        setRouteNote(value.hotelStay ? "Hotellopphold denne dagen: hotell → kunde er foreslått. Bruk «Bytt retning» for returen." : "Firmaadresse → kundeadresse er foreslått.");
         setRoute((current) => ({
           ...current,
           origin: value.origin ?? "",
           destination: value.destination ?? "",
           rate: String(Number(value.mileageRateOre ?? 500) / 100),
           configured: Boolean(value.mapsConfigured),
-        })),
-      );
-  }, [kind, orderId]);
+          km: "", toll: "",
+        })); setTollKnown(false);
+      }).catch((error) => { if (!cancelled) setError(error.message); });
+    return () => { cancelled = true; };
+  }, [kind, orderId, workDate]);
   async function calculateRoute() {
     setRouteBusy(true);
     setError("");
+    try {
     const response = await fetch(`/api/orders/${orderId}/route-estimate`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         origin: route.origin,
         destination: route.destination,
-        emissionType: "GASOLINE",
+        emissionType,
       }),
     });
     const value = await response.json();
     if (!response.ok) setError(value.error ?? "Kunne ikke beregne ruten.");
-    else
+    else {
+      setTollKnown(Boolean(value.tollKnown));
+      setRouteNote(value.tollKnown ? "Avstand og estimert bompengepris er hentet. Kontroller før lagring." : "Google oppga ingen bompengepris. Dette betyr ikke bomfritt: fyll inn beløpet manuelt, også 0 dersom ruten faktisk er bomfri.");
       setRoute((current) => ({
         ...current,
         km: String(value.distanceKm),
-        toll: String(Number(value.tollOre ?? 0) / 100),
+        toll: value.tollKnown ? String(Number(value.tollOre) / 100) : "",
       }));
-    setRouteBusy(false);
+    }
+    } catch { setError("Kunne ikke beregne ruten. Prøv igjen."); }
+    finally { setRouteBusy(false); }
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
     const form = new FormData(event.currentTarget);
     form.set("kind", kind);
+    form.set("requestId", requestId);
+    if (kind === "HOTEL") { form.set("startDate", workDate); form.set("autoTravel", String(autoTravel)); form.set("metadata", JSON.stringify({ emissionType })); }
+    if (kind === "DRIVING") form.set("metadata", JSON.stringify({ origin: route.origin, destination: route.destination, tollKnown: true, tollSource: tollKnown ? "GOOGLE_ESTIMATE" : "MANUAL", tollOre: Math.round(Number(route.toll) * 100) }));
     let body: BodyInit;
     const headers: HeadersInit = {};
     if (financial) {
@@ -1314,6 +1338,8 @@ function OrderEntryModal({
       return;
     }
     onSaved();
+    } catch (error) { setError(error instanceof Error ? error.message : "Kunne ikke lagre registreringen."); }
+    finally { setSaving(false); }
   }
   return (
     <div className="modal-backdrop">
@@ -1338,7 +1364,7 @@ function OrderEntryModal({
             <h2>Legg til {entryLabels[kind]}</h2>
             <p>Registreringen lagres permanent på ordren.</p>
           </div>
-          <button className="icon-button" onClick={onClose}>
+          <button className="icon-button" onClick={onClose} disabled={saving}>
             <X />
           </button>
         </div>
@@ -1356,11 +1382,12 @@ function OrderEntryModal({
               </select>
               {!catalogLoading && !catalog.length && <small>Ingen hurtigvalg ennå. Opprett dem under Produkter og tjenester.</small>}
             </Field>}
-            <Field label="Dato">
+            <Field label={kind === "HOTEL" ? "Fra dato (utreise)" : "Dato"}>
               <input
                 name="workDate"
                 type="date"
-                defaultValue={today}
+                value={workDate}
+                onChange={(event) => { setWorkDate(event.target.value); if (hotelEnd < event.target.value) setHotelEnd(event.target.value); }}
                 required
               />
             </Field>
@@ -1393,6 +1420,13 @@ function OrderEntryModal({
                 required
               />
             </Field>
+            {kind === "HOTEL" && <>
+              <Field label="Til dato (hjemreise)"><input name="endDate" type="date" min={workDate} value={hotelEnd} onChange={(event) => setHotelEnd(event.target.value)} required /></Field>
+              <Field label="Hotelladresse" wide><input name="hotelAddress" maxLength={500} placeholder="Gateadresse, postnummer og sted" required /></Field>
+              <Field label="Biltype for hotellreisen"><select value={emissionType} onChange={(event) => setEmissionType(event.target.value)}><option value="GASOLINE">Bensin</option><option value="DIESEL">Diesel</option><option value="ELECTRIC">Elektrisk</option><option value="HYBRID">Hybrid</option></select></Field>
+              <label className="wide"><input type="checkbox" checked={autoTravel} onChange={(event) => setAutoTravel(event.target.checked)} /> Legg automatisk til firma → hotell første dag og hotell → firma siste dag.</label>
+              <p className="wide">Kjøring beregnes med profilsatsen. Ukjente bompenger må kontrolleres på kjørelinjene. Fjern avhukingen dersom kjøringen allerede er registrert.</p>
+            </>}
             {kind === "LINE" && (
               <>
                 <Field label="Antall">
@@ -1425,7 +1459,7 @@ function OrderEntryModal({
                   <input
                     value={route.origin}
                     onChange={(event) =>
-                      setRoute({ ...route, origin: event.target.value })
+                      { setRoute({ ...route, origin: event.target.value, km: "", toll: "" }); setTollKnown(false); }
                     }
                     required
                   />
@@ -1434,12 +1468,13 @@ function OrderEntryModal({
                   <input
                     value={route.destination}
                     onChange={(event) =>
-                      setRoute({ ...route, destination: event.target.value })
+                      { setRoute({ ...route, destination: event.target.value, km: "", toll: "" }); setTollKnown(false); }
                     }
                     required
                   />
                 </Field>
                 <div className="route-action wide">
+                  <button type="button" className="secondary" onClick={() => { setRoute({ ...route, origin: route.destination, destination: route.origin, km: "", toll: "" }); setTollKnown(false); }}>Bytt retning</button>
                   <button
                     type="button"
                     className="secondary"
@@ -1450,10 +1485,12 @@ function OrderEntryModal({
                   </button>
                   <span>
                     {route.configured
-                      ? "Rute og bompenger beregnes automatisk."
+                      ? "Avstand beregnes. Bompenger hentes når Google har prisdata."
                       : "Google Maps er ikke aktivert i denne deployen."}
                   </span>
                 </div>
+                {routeNote && <p className="wide" role="status">{routeNote}</p>}
+                <Field label="Biltype"><select value={emissionType} onChange={(event) => { setEmissionType(event.target.value); setRoute({ ...route, toll: "" }); setTollKnown(false); }}><option value="GASOLINE">Bensin</option><option value="DIESEL">Diesel</option><option value="ELECTRIC">Elektrisk</option><option value="HYBRID">Hybrid</option></select></Field>
                 <Field label="Kilometer">
                   <input
                     name="quantity"
@@ -1485,8 +1522,9 @@ function OrderEntryModal({
                     min="0"
                     step="0.01"
                     value={route.toll}
+                    required
                     onChange={(event) =>
-                      setRoute({ ...route, toll: event.target.value })
+                      { setRoute({ ...route, toll: event.target.value }); setTollKnown(false); }
                     }
                   />
                 </Field>
@@ -1540,10 +1578,10 @@ function OrderEntryModal({
           )}
           {error && <p className="form-error">{error}</p>}
           <div className="modal-actions">
-            <button type="button" className="secondary" onClick={onClose}>
+            <button type="button" className="secondary" onClick={onClose} disabled={saving}>
               Avbryt
             </button>
-            <button className="primary">{financial ? "Lagre registrering" : "Last opp og lagre"}</button>
+            <button className="primary" disabled={saving || routeBusy}>{saving ? "Lagrer og beregner…" : financial ? "Lagre registrering" : "Last opp og lagre"}</button>
           </div>
         </form>
       </section>
@@ -1555,7 +1593,7 @@ function RegistrationEditModal({ entry, orderId, onClose, onSaved }: { entry: Ed
   const [error, setError] = useState("");
   const [previewError, setPreviewError] = useState(false);
   const [busy, setBusy] = useState(false);
-  const priced = ["TIME", "LINE"].includes(entry.kind);
+  const priced = ["TIME", "LINE", "DRIVING"].includes(entry.kind);
   const financial = !["IMAGE", "DOCUMENT"].includes(entry.kind);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1563,7 +1601,7 @@ function RegistrationEditModal({ entry, orderId, onClose, onSaved }: { entry: Ed
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`/api/orders/${orderId}/registrations`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: entry.id, type: entry.type, title: raw.title ?? entry.title, workDate: raw.workDate, description: raw.description, quantity: Number(raw.quantity ?? entry.quantity) || 1, rateOre: Math.round(Number(raw.rate ?? entry.rateOre / 100) * 100), amountOre: Math.round(Number(raw.amount ?? entry.amountOre / 100) * 100) }) });
+      const response = await fetch(`/api/orders/${orderId}/registrations`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: entry.id, type: entry.type, title: raw.title ?? entry.title, workDate: raw.workDate, description: raw.description, quantity: Number(raw.quantity ?? entry.quantity), rateOre: Math.round(Number(raw.rate ?? entry.rateOre / 100) * 100), amountOre: Math.round(Number(raw.amount ?? entry.amountOre / 100) * 100), ...(entry.kind === "DRIVING" ? { tollOre: Math.round(Number(raw.toll) * 100) } : {}) }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
       if (result.refreshDraft) {
@@ -1588,10 +1626,12 @@ function RegistrationEditModal({ entry, orderId, onClose, onSaved }: { entry: Ed
         </div>
       )}
       <form onSubmit={save}><div className="form-grid">
-        <Field label="Arbeidsdato"><input name="workDate" type="date" defaultValue={entry.workDate.slice(0, 10)} required /></Field>
+        <Field label="Arbeidsdato"><input name="workDate" type="date" defaultValue={entry.workDate.slice(0, 10)} readOnly={entry.kind === "HOTEL" && Boolean(entry.metadata?.startDate)} required /></Field>
+        {entry.kind === "HOTEL" && Boolean(entry.metadata?.startDate) && <p className="wide">Opphold: {formatDate(String(entry.metadata?.startDate))}–{formatDate(String(entry.metadata?.endDate))}. Adresse: {String(entry.metadata?.hotelAddress)}. Reiseperioden beholdes ved beløpsredigering.</p>}
         {entry.type === "EXTRA" && <Field label="Tittel"><input name="title" defaultValue={entry.title} required /></Field>}
         {priced && <><Field label={entry.type === "TIME" ? "Antall timer" : "Antall"}><input name="quantity" type="number" min="0.001" step="0.001" max={entry.type === "TIME" ? 24 : 1000000} defaultValue={entry.quantity} required /></Field><Field label="Sats (kr eks. MVA)"><input name="rate" type="number" min="0" step="0.01" defaultValue={entry.rateOre / 100} required /></Field></>}
         {financial && !priced && <Field label="Totalt beløp (kr eks. MVA)"><input name="amount" type="number" min="0" step="0.01" defaultValue={entry.amountOre / 100} required /></Field>}
+        {entry.kind === "DRIVING" && <Field label="Bompenger (kr eks. MVA)"><input name="toll" type="number" min="0" step="0.01" defaultValue={entry.metadata?.tollOre == null ? entry.metadata?.tollKnown === false ? "" : Math.max(0, entry.amountOre - Math.round(entry.quantity * entry.rateOre)) / 100 : Number(entry.metadata.tollOre) / 100} required /><small>Angi 0 kun dersom ruten er bomfri.</small></Field>}
         <Field label="Beskrivelse" wide><textarea name="description" defaultValue={entry.description ?? ""} maxLength={1000} /></Field>
       </div>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose} disabled={busy}>Avbryt</button><button className="primary" disabled={busy}>{busy ? "Lagrer…" : "Lagre endringer"}</button></div></form>
     </section></div>
@@ -1794,7 +1834,7 @@ function InvoicesScreen({ onOpen }: { onOpen: (id: string) => void }) {
                 </small>
               </div>
               <strong>
-                {(invoice.totalOre / 100).toLocaleString("nb-NO")} kr
+                {formatMoney(invoice.totalOre)}
               </strong>
               <em
                 className={`payment-${label(invoice).toLowerCase().replace(" ", "-")}`}
@@ -2022,8 +2062,7 @@ function InvoiceScreen({
         <section className="invoice-paper">
           <div className="invoice-paper-head">
             <div className="invoice-logo">
-              <span>OK</span>
-              <b>{String(company.name ?? "Ditt firma")}</b>
+              {typeof company.logoStorageKey === "string" && /^data:image\/(png|jpeg);base64,/.test(company.logoStorageKey) ? <Image src={company.logoStorageKey} alt={String(company.name ?? "Firmalogo")} width={265} height={85} unoptimized style={{ maxWidth: 265, height: "auto", maxHeight: 85, objectFit: "contain" }} /> : <><span>OK</span><b>{String(company.name ?? "Ditt firma")}</b></>}
             </div>
             <div className="invoice-title">
               <span>{finalized ? "FAKTURA" : "FAKTURAUTKAST"}</span>
@@ -2048,17 +2087,13 @@ function InvoiceScreen({
               <p>
                 <span>Fakturadato</span>
                 <b>
-                  {new Date(String(invoice.issueDate)).toLocaleDateString(
-                    "nb-NO",
-                  )}
+                  {formatDate(String(invoice.issueDate))}
                 </b>
               </p>
               <p>
                 <span>Forfall</span>
                 <b>
-                  {new Date(String(invoice.dueDate)).toLocaleDateString(
-                    "nb-NO",
-                  )}
+                  {formatDate(String(invoice.dueDate))}
                 </b>
               </p>
               <p><span>Kontonummer</span><b>{formatBankAccount(invoice.bankAccountSnapshot || company.bankAccount) || "Ikke registrert"}</b></p>
@@ -2069,21 +2104,21 @@ function InvoiceScreen({
             <div className="invoice-table-row head">
               <span>Beskrivelse</span>
               <span>Antall</span>
-              <span>Pris</span>
-              <span>Beløp</span>
+              <span>Pris eks. MVA</span>
+              <span>Beløp eks. MVA</span>
             </div>
             {data.lines.map((line) => (
               <div className="invoice-table-row" key={line.id}>
                 <span>{line.description}</span>
                 <span>
-                  {(line.quantityThousandths / 1000).toLocaleString("nb-NO")}{" "}
+                  {formatQuantity(line.quantityThousandths / 1000)}{" "}
                   {line.unit}
                 </span>
                 <span>
-                  {(line.unitPriceOre / 100).toLocaleString("nb-NO")} kr
+                  {formatMoney(line.unitPriceOre)}
                 </span>
                 <span>
-                  {(line.subtotalOre / 100).toLocaleString("nb-NO")} kr
+                  {formatMoney(line.subtotalOre)}
                 </span>
               </div>
             ))}
@@ -2092,24 +2127,24 @@ function InvoiceScreen({
             <p>
               <span>Netto</span>
               <b>
-                {(Number(invoice.subtotalOre) / 100).toLocaleString("nb-NO")} kr
+                {formatMoney(Number(invoice.subtotalOre))}
               </b>
             </p>
             <p>
               <span>MVA</span>
               <b>
-                {(Number(invoice.vatAmountOre) / 100).toLocaleString("nb-NO")}{" "}
-                kr
+                {formatMoney(Number(invoice.vatAmountOre))}
               </b>
             </p>
             <p className="grand-total">
               <span>Å betale</span>
               <b>
-                {(Number(invoice.totalOre) / 100).toLocaleString("nb-NO")} kr
+                {formatMoney(Number(invoice.totalOre))}
               </b>
             </p>
           </div>
           <div className="invoice-footer">
+            <div className="invoice-footer-note"><b>Takk for oppdraget!</b><p>{finalized ? "Vennligst bruk KID ved betaling. Ta kontakt dersom du har spørsmål til fakturaen." : "Dette er et fakturautkast og skal ikke betales før fakturaen er finalisert."}</p><p>{String(company.name ?? "")} · {[company.address, company.postalCode, company.city].filter(Boolean).join(", ")}</p></div>
             <span>
               {String(company.invoiceEmail || company.email || "")}{" "}
               {company.invoicePhone || company.phone
@@ -2118,7 +2153,7 @@ function InvoiceScreen({
             </span>
             <span>
               {company.organizationNumber
-                ? `Org.nr. ${String(company.organizationNumber)}`
+                ? `Org.nr. ${String(company.organizationNumber)}${company.vatRegistered ? " MVA" : ""}`
                 : ""}
             </span>
           </div>
