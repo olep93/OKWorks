@@ -76,6 +76,11 @@ export async function POST(
       db
         .select({
           title: orderEntries.title,
+          kind: orderEntries.kind,
+          amountOre: orderEntries.amountOre,
+          quantityThousandths: orderEntries.quantityThousandths,
+          unit: orderEntries.unit,
+          unitRateOre: orderEntries.unitRateOre,
           description: orderEntries.description,
           workDate: orderEntries.workDate,
           fileName: orderEntries.fileName,
@@ -95,7 +100,7 @@ export async function POST(
       (row): row is typeof row & { fileData: Uint8Array } =>
         Boolean(row.fileData),
     );
-    const pdf = await buildInvoicePdf(invoice, lines, attachments);
+    const pdf = await buildInvoicePdf(invoice, lines, attachments, attachmentRows);
     const delivery =
       await sqlClient`INSERT INTO invoice_deliveries (organization_id, invoice_id, recipient, subject, message, sent_by) VALUES (${user.organizationId}, ${id}, ${parsed.data.recipient}, ${parsed.data.subject}, ${parsed.data.message}, ${user.id}) RETURNING id`;
     const response = await fetch("https://api.resend.com/emails", {

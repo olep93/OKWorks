@@ -14,6 +14,7 @@ import {
   FileText,
   Hotel,
   LayoutDashboard,
+  LoaderCircle,
   LockKeyhole,
   LogOut,
   Menu,
@@ -956,6 +957,7 @@ function OrderDetails({
     }>
   >([]);
   const [deleting, setDeleting] = useState(false);
+  const [generatingInvoice, setGeneratingInvoice] = useState(false);
   const [editingRegistration, setEditingRegistration] = useState<EditableRegistration | null>(null);
   const [extraEntries, setExtraEntries] = useState<ExtraEntry[]>([]);
   const [showTime, setShowTime] = useState(false);
@@ -992,6 +994,9 @@ function OrderDetails({
       0,
     ) + extraEntries.reduce((sum, entry) => sum + entry.amountOre, 0);
   async function createInvoice() {
+    if (generatingInvoice) return;
+    setGeneratingInvoice(true);
+    try {
     const response = await fetch(`/api/orders/${order.id}/invoice`, {
       method: "POST",
     });
@@ -1001,6 +1006,11 @@ function OrderDetails({
       return;
     }
     onInvoice(data.invoice.id);
+    } catch {
+      window.alert("Kunne ikke lage fakturautkastet. Prøv igjen.");
+    } finally {
+      setGeneratingInvoice(false);
+    }
   }
   async function deleteOrder() {
     if (
@@ -1045,10 +1055,11 @@ function OrderDetails({
             <button
               className="primary invoice-button"
               onClick={createInvoice}
-              disabled={!totalOre}
+              disabled={!totalOre || generatingInvoice}
+              aria-busy={generatingInvoice}
             >
-              <Sparkles />
-              Lag fakturautkast
+              {generatingInvoice ? <LoaderCircle className="loading-spinner" /> : <Sparkles />}
+              {generatingInvoice ? "Genererer fakturautkast…" : "Lag fakturautkast"}
             </button>
           </div>
         </div>

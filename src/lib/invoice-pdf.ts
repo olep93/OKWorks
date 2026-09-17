@@ -3,13 +3,14 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 type Snapshot = Record<string, unknown>;
 type Line = { description: string; quantityThousandths: number; unit: string; unitPriceOre: number; subtotalOre: number; vatBasisPoints: number };
 type Attachment = { title: string; description: string | null; workDate: Date | string; fileName: string | null; mimeType: string | null; fileData: Uint8Array };
+type Registration = Omit<Attachment, "fileData"> & { fileData: Uint8Array | null; kind: string; amountOre?: number; quantityThousandths?: number | null; unit?: string | null; unitRateOre?: number | null };
 type Invoice = { invoiceNumber: number | null; status: string; issueDate: Date | string | null; dueDate: Date | string | null; subtotalOre: number; vatAmountOre: number; totalOre: number; currency: string; organizationSnapshot: unknown; customerSnapshot: unknown; bankAccountSnapshot: string | null };
 
 const asText = (value: unknown) => typeof value === "string" ? value : "";
 const money = (ore: number) => `${(ore / 100).toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr`;
 const date = (value: Date | string | null) => value ? new Date(value).toLocaleDateString("nb-NO") : "—";
 
-export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachments: Attachment[] = []) {
+export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachments: Attachment[] = [], registrations: Registration[] = attachments.map((item) => ({ ...item, kind: item.mimeType === "application/pdf" ? "DOCUMENT" : "IMAGE" }))) {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -81,7 +82,7 @@ export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachmen
   drawText(contact, margin, 55, 8, false, muted);
   drawText(company.organizationNumber ? `Org.nr. ${asText(company.organizationNumber)}` : "", width - margin - 115, 55, 8, false, muted);
 
-  if (attachments.length) {
+  if (registrations.length) {
     const appendixPage = () => {
       page = pdf.addPage([width, height]);
       drawText("FAKTURAVEDLEGG", margin, height - 65, 18, true);
@@ -97,33 +98,68 @@ export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachmen
       drawText(`${(item.quantityThousandths / 1000).toLocaleString("nb-NO")} ${item.unit}  |  ${money(item.subtotalOre)}`, margin, appendixY - 15, 8, false, muted);
       appendixY -= 39;
     });
-    if (appendixY < 135) appendixY = appendixPage();
-    drawText("DOKUMENTASJON", margin, appendixY, 8, true, muted); appendixY -= 25;
-    attachments.forEach((attachment, index) => {
-      if (appendixY < 105) { appendixY = appendixPage(); drawText("DOKUMENTASJON, FORTSETTELSE", margin, appendixY, 8, true, muted); appendixY -= 25; }
-      drawText(`${index + 1}. ${attachment.title}`, margin, appendixY, 10, true);
-      drawText(`${date(attachment.workDate)}  |  ${attachment.fileName || "Vedlegg"}`, margin, appendixY - 15, 8, false, muted);
-      if (attachment.description) drawText(attachment.description.slice(0, 85), margin, appendixY - 29, 8, false, muted);
-      appendixY -= attachment.description ? 52 : 39;
-    });
-
-    for (const attachment of attachments) {
-      if (attachment.mimeType === "application/pdf") {
-        const source = await PDFDocument.load(attachment.fileData);
-        const copied = await pdf.copyPages(source, source.getPageIndices());
-        copied.forEach((copiedPage) => pdf.addPage(copiedPage));
-        continue;
+    const sections = [
+      { name: "BILDER OG DOKUMENTASJON", kinds: ["IMAGE", "DOCUMENT"] },
+      { name: "UTLEGG", kinds: ["EXPENSE"] },
+      { name: "HOTELL", kinds: ["HOTEL"] },
+      { name: "KJØRING", kinds: ["DRIVING"] },
+      { name: "DIETT", kinds: ["DIET"] },
+    ];
+    const wrap = (text: string, size: number) => {
+      const rows: string[] = [];
+      let current = "";
+      for (const char of text.replace(/[–—]/g, "-")) {
+        if (char === "\n" || regular.widthOfTextAtSize(current + char, size) > width - margin * 2) {
+          rows.push(current); current = char === "\n" ? "" : char;
+        } else current += char;
       }
-      if (appendixY < 245) appendixY = appendixPage();
-      drawText(attachment.title, margin, appendixY, 11, true);
-      drawText(`${date(attachment.workDate)}  |  ${attachment.fileName || "Bilde"}`, margin, appendixY - 15, 8, false, muted);
-      const embedded = attachment.mimeType === "image/png" ? await pdf.embedPng(attachment.fileData) : await pdf.embedJpg(attachment.fileData);
-      const maxWidth = width - margin * 2, maxHeight = Math.min(420, appendixY - 90);
-      const scale = Math.min(maxWidth / embedded.width, maxHeight / embedded.height, 1);
-      const imageWidth = embedded.width * scale, imageHeight = embedded.height * scale;
-      const imageY = appendixY - 30 - imageHeight;
-      page.drawImage(embedded, { x: (width - imageWidth) / 2, y: imageY, width: imageWidth, height: imageHeight });
-      appendixY = imageY - 30;
+      if (current) rows.push(current);
+      return rows;
+    };
+    for (const section of sections) {
+      const items = registrations.filter((item) => section.kinds.includes(item.kind));
+      if (!items.length) continue;
+      const heading = (continuation = false) => {
+        drawText(section.name + (continuation ? " - FORTSETTELSE" : ""), margin, appendixY, 10, true, muted);
+        appendixY -= 27;
+      };
+      const ensureSpace = (required: number) => {
+        if (appendixY - required < 65) { appendixY = appendixPage(); heading(true); }
+      };
+      for (const [index, item] of items.entries()) {
+        const image = item.fileData && item.mimeType?.startsWith("image/")
+          ? item.mimeType === "image/png" ? await pdf.embedPng(item.fileData) : await pdf.embedJpg(item.fileData)
+          : null;
+        const scale = image ? Math.min((width - margin * 2) / image.width, 300 / image.height, 1) : 0;
+        const imageHeight = image ? image.height * scale : 0;
+        const titleRows = wrap(`${index + 1}. ${item.title}`, 11);
+        const requiredSpace = titleRows.length * 15 + 45 + imageHeight + (item.description ? 35 : 0);
+        if (index === 0) {
+          if (appendixY - requiredSpace - 27 < 65) appendixY = appendixPage();
+          heading();
+        } else ensureSpace(requiredSpace);
+        for (const title of titleRows) { drawText(title, margin, appendixY, 11, true); appendixY -= 15; }
+        const detail = [date(item.workDate), item.fileName, item.amountOre != null && !["IMAGE", "DOCUMENT"].includes(item.kind) ? `${money(item.amountOre)} eks. MVA` : ""].filter(Boolean).join("  |  ");
+        for (const text of wrap(detail, 8)) { drawText(text, margin, appendixY, 8, false, muted); appendixY -= 12; }
+        if (item.kind === "DRIVING" && item.quantityThousandths != null) {
+          drawText(`${(item.quantityThousandths / 1000).toLocaleString("nb-NO")} ${item.unit || "km"}  |  ${money(item.unitRateOre ?? 0)} per ${item.unit || "km"}`, margin, appendixY, 9); appendixY -= 16;
+        }
+        if (image) {
+          appendixY -= 8;
+          page.drawImage(image, { x: margin, y: appendixY - imageHeight, width: image.width * scale, height: imageHeight });
+          appendixY -= imageHeight + 18;
+        }
+        if (item.description) for (const text of wrap(item.description, 9)) {
+          ensureSpace(14); drawText(text, margin, appendixY, 9); appendixY -= 14;
+        }
+        appendixY -= 22;
+        if (item.fileData && item.mimeType === "application/pdf") {
+          const source = await PDFDocument.load(item.fileData);
+          const copied = await pdf.copyPages(source, source.getPageIndices());
+          copied.forEach((copiedPage) => pdf.addPage(copiedPage));
+          appendixY = 0;
+        }
+      }
     }
   }
 

@@ -14,10 +14,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     if (!invoice) return NextResponse.json({ error: "Fakturaen finnes ikke." }, { status: 404 });
     const [lines, attachmentRows] = await Promise.all([
       db.select().from(invoiceLines).where(and(eq(invoiceLines.invoiceId, id), eq(invoiceLines.organizationId, user.organizationId))).orderBy(asc(invoiceLines.sortOrder)),
-      db.select({ title: orderEntries.title, description: orderEntries.description, workDate: orderEntries.workDate, fileName: orderEntries.fileName, mimeType: orderEntries.mimeType, fileData: orderEntries.fileData }).from(orderEntries).where(and(eq(orderEntries.orderId, invoice.sourceOrderId), eq(orderEntries.organizationId, user.organizationId))).orderBy(asc(orderEntries.workDate), asc(orderEntries.createdAt)),
+      db.select().from(orderEntries).where(and(eq(orderEntries.orderId, invoice.sourceOrderId), eq(orderEntries.organizationId, user.organizationId))).orderBy(asc(orderEntries.workDate), asc(orderEntries.createdAt)),
     ]);
     const attachments = attachmentRows.filter((row): row is typeof row & { fileData: Uint8Array } => Boolean(row.fileData));
-    const bytes = await buildInvoicePdf(invoice, lines, attachments);
+    const bytes = await buildInvoicePdf(invoice, lines, attachments, attachmentRows);
     const filename = invoice.invoiceNumber ? `faktura-${invoice.invoiceNumber}.pdf` : "fakturautkast.pdf";
     return new NextResponse(Buffer.from(bytes), { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="${filename}"`, "cache-control": "private, no-store" } });
   } catch (error) {
