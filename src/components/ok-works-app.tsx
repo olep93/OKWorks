@@ -2438,22 +2438,36 @@ function SettingsScreen({
 }) {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
+  const [logoError, setLogoError] = useState("");
   async function uploadLogo(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    setError("");
+    setLogoError("");
     setLogoBusy(true);
     try {
-      if (!["image/png", "image/jpeg"].includes(file.type)) throw new Error("Velg PNG eller JPG.");
-      const bitmap = await createImageBitmap(file);
-      const scale = Math.min(1, 1200 / Math.max(bitmap.width, bitmap.height));
+      const mimeType = file.type || (/\.png$/i.test(file.name) ? "image/png" : /\.jpe?g$/i.test(file.name) ? "image/jpeg" : "");
+      if (!["image/png", "image/jpeg"].includes(mimeType)) throw new Error("Velg en PNG- eller JPG-fil. HEIC, SVG og PDF støttes ikke som firmalogo.");
+      if (file.size > 15_000_000) throw new Error("Bildet er for stort. Velg et bilde på maks 15 MB.");
+      const source = URL.createObjectURL(file);
+      const bitmap = new window.Image();
+      try {
+        await new Promise<void>((resolve, reject) => {
+          bitmap.onload = () => resolve();
+          bitmap.onerror = () => reject(new Error("Kunne ikke lese bildet. Prøv en PNG- eller JPG-fil."));
+          bitmap.src = source;
+        });
+      } finally {
+        URL.revokeObjectURL(source);
+      }
+      const scale = Math.min(1, 1200 / Math.max(bitmap.naturalWidth, bitmap.naturalHeight));
       const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-      canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      bitmap.close();
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, file.type, 0.85));
+      canvas.width = Math.max(1, Math.round(bitmap.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.naturalHeight * scale));
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Nettleseren kunne ikke behandle bildet.");
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mimeType, 0.85));
       if (!blob) throw new Error("Kunne ikke behandle bildet.");
       const body = new FormData();
       body.append("logo", blob, file.name);
@@ -2463,7 +2477,7 @@ function SettingsScreen({
       await load();
       onSaved("Firmalogo lagret. Logoen brukes på fakturautkast og nye fakturaer.");
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Kunne ikke laste opp logoen.");
+      setLogoError(error instanceof Error ? error.message : "Kunne ikke laste opp logoen.");
     } finally {
       setLogoBusy(false);
     }
@@ -2636,10 +2650,11 @@ function SettingsScreen({
                 PNG eller JPG. Logoen vises på fakturaen. Finaliserte fakturaer beholder tidligere logo.
               </span>
             </div>
-            <label className="secondary">
-              {logoBusy ? "Laster opp…" : org.logoStorageKey ? "Bytt logo" : "Last opp logo"}
-              <input type="file" accept="image/png,image/jpeg" onChange={uploadLogo} disabled={logoBusy} style={{ display: "none" }} />
-            </label>
+            <div className="logo-upload">
+              <label htmlFor="company-logo">{logoBusy ? "Laster opp…" : org.logoStorageKey ? "Bytt logo" : "Last opp logo"}</label>
+              <input id="company-logo" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" onChange={uploadLogo} disabled={logoBusy} />
+              {logoError && <p className="form-error" role="alert">{logoError}</p>}
+            </div>
           </div>
         </section>
         <section className="panel settings-card">
