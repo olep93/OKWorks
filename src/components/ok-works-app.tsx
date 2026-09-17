@@ -31,6 +31,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { formatBankAccount } from "@/lib/bank-account-format";
 import { formatMoney, formatQuantity, formatDate, localDate } from "@/lib/format";
+import { summarizeInvoiceLines } from "@/lib/invoice-summary";
 
 type User = {
   id: string;
@@ -1153,7 +1154,8 @@ function OrderDetails({
           {extraEntries.map((entry) => (
             <div className="time-row activity-row" key={entry.id}>
               <div>
-                <b>{entry.title}</b>
+                <b>{entry.kind === "DRIVING" ? entry.title.startsWith("Retur") || entry.title.startsWith("Hjemreise") ? "Hjemreise / retur" : entry.title.startsWith("Utreise") ? "Utreise" : "Kjøring" : entry.title}</b>
+                {entry.kind === "DRIVING" && <span>{entry.metadata?.origin && entry.metadata?.destination ? `${String(entry.metadata.origin)} → ${String(entry.metadata.destination)}` : entry.title}</span>}
                 <span>
                   {new Date(entry.workDate).toLocaleDateString("nb-NO")} ·{" "}
                   {entry.description || entry.fileName || "Registrert"}
@@ -1255,6 +1257,7 @@ function OrderEntryModal({
   const today = localDate();
   const [workDate, setWorkDate] = useState(today);
   const [hotelEnd, setHotelEnd] = useState(today);
+  const [hotelAddress, setHotelAddress] = useState("");
   const [autoTravel, setAutoTravel] = useState(true);
   const [routeNote, setRouteNote] = useState("");
   const [tollKnown, setTollKnown] = useState(false);
@@ -1339,7 +1342,7 @@ function OrderEntryModal({
     form.set("kind", kind);
     form.set("requestId", requestId);
     if (kind === "HOTEL") { form.set("startDate", workDate); form.set("autoTravel", String(autoTravel)); form.set("metadata", JSON.stringify({ emissionType, vehicleName, autoPass })); }
-    if (kind === "DRIVING") form.set("metadata", JSON.stringify({ origin: route.origin, destination: route.destination, emissionType, vehicleName, autoPass, departureTime, tollKnown: true, tollSource: tollKnown ? tollProvider === "DIB" ? "DIB" : "GOOGLE_ESTIMATE" : "MANUAL", tollOre: Math.round(Number(route.toll) * 100), ...(includeReturn ? { returnTrip: { date: returnDate, quantity: Number(returnKm), tollOre: Math.round(Number(returnToll) * 100), tollSource: returnTollKnown ? tollProvider === "DIB" ? "DIB" : "GOOGLE_ESTIMATE" : "MANUAL" } } : {}) }));
+    if (kind === "DRIVING") form.set("metadata", JSON.stringify({ origin: route.origin, destination: route.destination, emissionType, vehicleName, autoPass, departureTime, tollKnown: true, tollInputGross: true, tollSource: tollKnown ? tollProvider === "DIB" ? "DIB" : "GOOGLE_ESTIMATE" : "MANUAL", tollOre: Math.round(Number(route.toll) * 100), ...(includeReturn ? { returnTrip: { date: returnDate, quantity: Number(returnKm), tollOre: Math.round(Number(returnToll) * 100), tollSource: returnTollKnown ? tollProvider === "DIB" ? "DIB" : "GOOGLE_ESTIMATE" : "MANUAL" } } : {}) }));
     let body: BodyInit;
     const headers: HeadersInit = {};
     if (financial) {
@@ -1465,7 +1468,7 @@ function OrderEntryModal({
             </Field>
             {kind === "HOTEL" && <>
               <Field label="Til dato (hjemreise)"><input name="endDate" type="date" min={workDate} value={hotelEnd} onChange={(event) => setHotelEnd(event.target.value)} required /></Field>
-              <Field label="Hotelladresse" wide><input name="hotelAddress" maxLength={500} placeholder="Gateadresse, postnummer og sted" required /></Field>
+              <Field label="Hotelladresse" wide><input name="hotelAddress" value={hotelAddress} onChange={(event) => setHotelAddress(event.target.value)} maxLength={500} placeholder="Gateadresse, postnummer og sted" required />{hotelAddress.trim() && <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hotelAddress)}`} target="_blank" rel="noreferrer">Kontroller hotellet i Google Maps</a>}<small>Søk opp hotellet i Maps og bruk full gateadresse her. Automatisk hotellkjøring bruker denne adressen.</small></Field>
               <Field label="Biltype for hotellreisen"><select value={emissionType} onChange={(event) => setEmissionType(event.target.value)}><option value="GASOLINE">Bensin</option><option value="DIESEL">Diesel</option><option value="ELECTRIC">Elektrisk</option><option value="HYBRID">Hybrid</option></select></Field>
               <label className="wide"><input type="checkbox" checked={autoTravel} onChange={(event) => setAutoTravel(event.target.checked)} /> Legg automatisk til firma → hotell første dag og hotell → firma siste dag.</label>
               <p className="wide">Kjøring beregnes med profilsatsen. Ukjente bompenger må kontrolleres på kjørelinjene. Fjern avhukingen dersom kjøringen allerede er registrert.</p>
@@ -1562,7 +1565,7 @@ function OrderEntryModal({
                     required
                   />
                 </Field>
-                <Field label="Bompenger / ferje (kr)">
+                <Field label="Bompenger / ferje (kr inkl. fakturaens MVA)">
                   <input
                     name="tollOre"
                     type="number"
@@ -1579,7 +1582,7 @@ function OrderEntryModal({
                   <Field label="Returdato"><input type="date" min={workDate} value={returnDate} onChange={(event) => { setReturnDate(event.target.value); setReturnToll(""); }} required /></Field>
                   <Field label="Retur kl."><input type="time" value={returnTime} onChange={(event) => { setReturnTime(event.target.value); setReturnToll(""); }} required /></Field>
                   <Field label="Kilometer retur"><input type="number" min="0" step="0.1" value={returnKm} onChange={(event) => setReturnKm(event.target.value)} required /></Field>
-                  <Field label="Bompenger / ferje retur (kr)"><input type="number" min="0" step="0.01" value={returnToll} onChange={(event) => { setReturnToll(event.target.value); setReturnTollKnown(false); }} required /></Field>
+                  <Field label="Bompenger / ferje retur (kr inkl. fakturaens MVA)"><input type="number" min="0" step="0.01" value={returnToll} onChange={(event) => { setReturnToll(event.target.value); setReturnTollKnown(false); }} required /></Field>
                   <p className="wide">Returen beregnes separat; avstand og bompenger kan være annerledes enn på utreisen. Samme km-sats brukes begge veier.</p>
                 </>}
                 <a className="secondary wide" href="https://bompengekalkulator.no/" target="_blank" rel="noopener noreferrer">Åpne bompengekalkulator for manuell kontroll</a>
@@ -1686,7 +1689,7 @@ function RegistrationEditModal({ entry, orderId, onClose, onSaved }: { entry: Ed
         {entry.type === "EXTRA" && <Field label="Tittel"><input name="title" defaultValue={entry.title} required /></Field>}
         {priced && <><Field label={entry.type === "TIME" ? "Antall timer" : "Antall"}><input name="quantity" type="number" min="0.001" step="0.001" max={entry.type === "TIME" ? 24 : 1000000} defaultValue={entry.quantity} required /></Field><Field label="Sats (kr eks. MVA)"><input name="rate" type="number" min="0" step="0.01" defaultValue={entry.rateOre / 100} required /></Field></>}
         {financial && !priced && <Field label="Totalt beløp (kr eks. MVA)"><input name="amount" type="number" min="0" step="0.01" defaultValue={entry.amountOre / 100} required /></Field>}
-        {entry.kind === "DRIVING" && <Field label="Bompenger (kr eks. MVA)"><input name="toll" type="number" min="0" step="0.01" defaultValue={entry.metadata?.tollOre == null ? entry.metadata?.tollKnown === false ? "" : Math.max(0, entry.amountOre - Math.round(entry.quantity * entry.rateOre)) / 100 : Number(entry.metadata.tollOre) / 100} required /><small>Angi 0 kun dersom ruten er bomfri.</small></Field>}
+        {entry.kind === "DRIVING" && <Field label="Bompenger / ferje (kr inkl. fakturaens MVA)"><input name="toll" type="number" min="0" step="0.01" defaultValue={entry.metadata?.tollOre == null ? entry.metadata?.tollKnown === false ? "" : Math.max(0, entry.amountOre - Math.round(entry.quantity * entry.rateOre)) / 100 : Number(entry.metadata.tollOre) / 100} required /><small>Angi 0 kun dersom ruten er bomfri.</small></Field>}
         <Field label="Beskrivelse" wide><textarea name="description" defaultValue={entry.description ?? ""} maxLength={1000} /></Field>
       </div>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose} disabled={busy}>Avbryt</button><button className="primary" disabled={busy}>{busy ? "Lagrer…" : "Lagre endringer"}</button></div></form>
     </section></div>
@@ -1939,6 +1942,7 @@ function InvoiceScreen({
     lines: Array<{
       id: string;
       description: string;
+      lineType: string;
       quantityThousandths: number;
       unit: string;
       unitPriceOre: number;
@@ -2162,8 +2166,8 @@ function InvoiceScreen({
               <span>Pris eks. MVA</span>
               <span>Beløp eks. MVA</span>
             </div>
-            {data.lines.map((line) => (
-              <div className="invoice-table-row" key={line.id}>
+            {summarizeInvoiceLines(data.lines).map((line, index) => (
+              <div className="invoice-table-row" key={index}>
                 <span>{line.description}</span>
                 <span>
                   {formatQuantity(line.quantityThousandths / 1000)}{" "}

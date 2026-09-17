@@ -2,9 +2,10 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { formatBankAccount } from "./bank-account-format";
 import { formatMoney as money, formatDate as date, formatQuantity } from "./format";
 import { fullAddress, hotelStay } from "./travel";
+import { summarizeInvoiceLines } from "./invoice-summary";
 
 type Snapshot = Record<string, unknown>;
-type Line = { description: string; quantityThousandths: number; unit: string; unitPriceOre: number; subtotalOre: number; vatBasisPoints: number };
+type Line = { description: string; lineType?: string; quantityThousandths: number; unit: string; unitPriceOre: number; subtotalOre: number; vatBasisPoints: number };
 type Attachment = { title: string; description: string | null; workDate: Date | string; fileName: string | null; mimeType: string | null; fileData: Uint8Array };
 type Registration = Omit<Attachment, "fileData"> & { fileData: Uint8Array | null; kind: string; amountOre?: number; quantityThousandths?: number | null; unit?: string | null; unitRateOre?: number | null; metadata?: unknown };
 type Invoice = { invoiceNumber: number | null; status: string; issueDate: Date | string | null; dueDate: Date | string | null; subtotalOre: number; vatAmountOre: number; totalOre: number; currency: string; organizationSnapshot: unknown; customerSnapshot: unknown; bankAccountSnapshot: string | null };
@@ -89,7 +90,7 @@ export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachmen
     y -= 30;
   };
   drawTableHead();
-  for (const item of lines) {
+  for (const item of summarizeInvoiceLines(lines)) {
     const rows = wrapText(item.description, 240, 8.5);
     const quantityRows = wrapText(`${formatQuantity(item.quantityThousandths / 1000)} ${item.unit}`, 69, 8);
     const rowHeight = Math.max(rows.length, quantityRows.length) * 12 + 14;
@@ -173,9 +174,12 @@ export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachmen
           : null;
         const scale = image ? Math.min((width - margin * 2) / image.width, 300 / image.height, 1) : 0;
         const imageHeight = image ? image.height * scale : 0;
-        const titleRows = wrap(`${index + 1}. ${item.title}`, 11);
+        const tripMetadata = item.metadata as Record<string, unknown> | null;
+        const tripTitle = item.title.startsWith("Retur") || item.title.startsWith("Hjemreise") ? "Hjemreise / retur" : item.title.startsWith("Utreise") ? "Utreise" : "Kjøring";
+        const titleRows = wrap(`${index + 1}. ${item.kind === "DRIVING" ? tripTitle : item.title}`, 11);
         const stay = item.kind === "HOTEL" ? hotelStay(item.metadata) : null;
-        const detail = [date(item.workDate), item.fileName, item.amountOre != null && !["IMAGE", "DOCUMENT"].includes(item.kind) ? `${money(item.amountOre)} eks. MVA` : ""].filter(Boolean).join("  |  ");
+        const drivingDetails = item.kind === "DRIVING" ? [tripMetadata?.origin && tripMetadata?.destination ? `${String(tripMetadata.origin)} - ${String(tripMetadata.destination)}` : item.title, tripMetadata?.tollOre != null ? `Bompenger / ferje: ${money(Number(tripMetadata.tollOre))}${tripMetadata.tollInputGross ? " inkl. fakturaens MVA" : ""}` : ""].filter(Boolean).join("\n") : "";
+        const detail = [date(item.workDate), item.fileName, item.amountOre != null && !["IMAGE", "DOCUMENT", "DRIVING"].includes(item.kind) ? `${money(item.amountOre)} eks. MVA` : "", drivingDetails].filter(Boolean).join("\n");
         const requiredSpace = titleRows.length * 15 + wrap(detail, 8).length * 12 + 33 + imageHeight + (stay ? 14 : 0) + (item.kind === "DRIVING" ? 14 : 0) + (item.description ? 35 : 0);
         if (index === 0) {
           if (appendixY - requiredSpace - 27 < 65) appendixY = appendixPage();

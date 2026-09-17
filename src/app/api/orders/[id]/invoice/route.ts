@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { customers, invoiceLines, invoices, orderEntries, orders, organizations, timeEntries } from "@/lib/db/schema";
+import { drivingInvoiceAmounts } from "@/lib/invoice-summary";
 
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -19,13 +20,21 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
       db.select().from(orderEntries).where(and(eq(orderEntries.orderId, id), eq(orderEntries.organizationId, user.organizationId))),
     ]);
     if (!customer || !organization) return NextResponse.json({ error: "Kunde- eller firmainformasjon mangler." }, { status: 400 });
-    const vatRate = organization.defaultVatBasisPoints;
+    const vatRate = organization.vatRegistered ? organization.defaultVatBasisPoints : 0;
     const sources = [
       ...timeRows.map((row) => ({ sourceType: "TIME", sourceId: row.id, lineType: "TIME", description: row.description || `Arbeid ${row.workDate.toLocaleDateString("nb-NO")}`, quantityThousandths: Math.round(row.minutes / 60 * 1000), unit: "timer", unitPriceOre: row.ratePerHourOre, subtotalOre: Math.round(row.minutes / 60 * row.ratePerHourOre) })),
       ...entryRows.filter((row) => !["IMAGE", "DOCUMENT"].includes(row.kind)).map((row) => ({ sourceType: row.kind, sourceId: row.id, lineType: row.kind, description: row.title + (row.description ? ` – ${row.description}` : ""), quantityThousandths: row.quantityThousandths ?? 1000, unit: row.unit ?? "stk", unitPriceOre: row.unitRateOre ?? row.amountOre, subtotalOre: row.amountOre })),
     ];
     if (!sources.length) return NextResponse.json({ error: "Registrer minst én fakturerbar post først." }, { status: 400 });
-    const prepared = sources.map((line, index) => { const vatAmountOre = Math.round(line.subtotalOre * vatRate / 10000); return { ...line, organizationId: user.organizationId, vatBasisPoints: vatRate, vatAmountOre, totalOre: line.subtotalOre + vatAmountOre, sortOrder: index }; });
+    const prepared = sources.map((line, index) => {
+      const source = entryRows.find((row) => row.id === line.sourceId);
+      const metadata = source?.metadata as Record<string, unknown> | null;
+      const vatAmountOre = Math.round(line.subtotalOre * vatRate / 10000);
+      const amounts = line.lineType === "DRIVING" && metadata?.tollInputGross === true
+        ? drivingInvoiceAmounts(line.subtotalOre, Number(metadata.tollOre ?? 0), vatRate)
+        : { subtotalOre: line.subtotalOre, vatAmountOre, totalOre: line.subtotalOre + vatAmountOre };
+      return { ...line, ...amounts, organizationId: user.organizationId, vatBasisPoints: vatRate, sortOrder: index };
+    });
     const subtotalOre = prepared.reduce((sum, line) => sum + line.subtotalOre, 0); const vatAmountOre = prepared.reduce((sum, line) => sum + line.vatAmountOre, 0); const totalOre = subtotalOre + vatAmountOre;
     const invoice = await db.transaction(async (tx) => {
       let draft = existingInvoice;
