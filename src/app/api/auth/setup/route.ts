@@ -22,13 +22,14 @@ export async function POST(request: Request) {
     gt(users.setupExpiresAt, new Date()),
   )).limit(1);
   if (!user) return NextResponse.json({ error: "Oppstartskoden er ugyldig eller utløpt." }, { status: 401 });
-  await db.update(users).set({
+  const changed = await db.update(users).set({
     passwordHash: await hashPassword(parsed.data.password),
     setupTokenHash: null,
     setupExpiresAt: null,
     emailVerifiedAt: new Date(),
     updatedAt: new Date(),
-  }).where(eq(users.id, user.id));
+  }).where(and(eq(users.id, user.id), isNull(users.passwordHash), eq(users.setupTokenHash, tokenHash(parsed.data.setupCode)), gt(users.setupExpiresAt, new Date()))).returning({ id: users.id });
+  if (!changed.length) return NextResponse.json({ error: "Oppstartskoden er allerede brukt eller utløpt." }, { status: 401 });
   await createSession(user.id);
   return NextResponse.json({ ok: true });
 }

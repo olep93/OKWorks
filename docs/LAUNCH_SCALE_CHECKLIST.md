@@ -20,6 +20,8 @@ Registreringsruten setter i dag `email_verified_at = now()` uten e-postbevis. De
 - Ved utsendelsesfeil: tydelig ny utsending, ikke erklære e-post bekreftet.
 - Førstegangsoppsett og tenant-isolasjon testes ende til ende med to separate firmaer.
 
+Delstatus: passordtilbakestilling er implementert med 30 minutters engangslenke, hash i database og atomisk tilbakekalling av gamle sesjoner. Kodekontroller og enhetstester er bestått. Resend-nøkkel/avsender, produksjonsmigrering og faktisk e-postflyt må verifiseres før funksjonen regnes som ferdig. Se `password-recovery.md`. E-postbekreftelse ved registrering gjenstår; dette er ikke et fullført kontooppsett.
+
 ## P0: abonnement og avtale
 
 - Betalingsleverandør med hosted checkout, tilbakevendende NOK-belastning og verifisert utbetalingskonto. Ikke lagre kortinformasjon i OK Works.

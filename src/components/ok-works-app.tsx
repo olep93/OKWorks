@@ -346,6 +346,7 @@ function Login({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
               />
             </label>
           )}
+          {step === "password" && <a href="/account/forgot">Glemt passord?</a>}
           {step === "register" && (
             <label className="terms-row">
               <input name="acceptedTerms" type="checkbox" required />
