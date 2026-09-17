@@ -1521,6 +1521,7 @@ function OrderEntryModal({
 
 function RegistrationEditModal({ entry, orderId, onClose, onSaved }: { entry: EditableRegistration; orderId: string; onClose: () => void; onSaved: () => Promise<void> }) {
   const [error, setError] = useState("");
+  const [previewError, setPreviewError] = useState(false);
   const [busy, setBusy] = useState(false);
   const priced = ["TIME", "LINE"].includes(entry.kind);
   const financial = !["IMAGE", "DOCUMENT"].includes(entry.kind);
@@ -1547,6 +1548,13 @@ function RegistrationEditModal({ entry, orderId, onClose, onSaved }: { entry: Ed
   return (
     <div className="modal-backdrop"><section className="entry-modal" role="dialog" aria-modal="true" aria-label="Rediger registrering">
       <div className="modal-head"><div><h2>Rediger registrering</h2><p>Beløp og satser er eks. MVA. Fakturautkast oppdateres ved lagring.</p></div><button className="icon-button" onClick={onClose} disabled={busy} aria-label="Lukk"><X /></button></div>
+      {["IMAGE", "DOCUMENT"].includes(entry.kind) && (
+        <div className="registration-file-preview">
+          {entry.kind === "IMAGE" && !previewError && <Image src={`/api/orders/${orderId}/entries/${entry.id}/file`} alt={entry.title} width={600} height={350} unoptimized onError={() => setPreviewError(true)} style={{ width: "100%", height: "auto", maxHeight: 350, objectFit: "contain" }} />}
+          {previewError && <p className="form-error" role="alert">Bildet kunne ikke forhåndsvises.</p>}
+          <a className="secondary" href={`/api/orders/${orderId}/entries/${entry.id}/file`} target="_blank" rel="noopener noreferrer">Åpne opplastet fil</a>
+        </div>
+      )}
       <form onSubmit={save}><div className="form-grid">
         <Field label="Arbeidsdato"><input name="workDate" type="date" defaultValue={entry.workDate.slice(0, 10)} required /></Field>
         {entry.type === "EXTRA" && <Field label="Tittel"><input name="title" defaultValue={entry.title} required /></Field>}
