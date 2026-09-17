@@ -1,7 +1,9 @@
 import { PDFDocument } from "pdf-lib";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
-import { sqlClient } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { invoices, organizations } from "@/lib/db/schema";
 
 export async function POST(request: Request) {
   try {
@@ -18,12 +20,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Bildet kunne ikke leses. Bruk PNG eller JPG, maks 4096 piksler per side." }, { status: 400 });
     }
     const logo = `data:${file.type};base64,${bytes.toString("base64")}`;
-    await sqlClient.begin(async (tx) => {
-      await tx`UPDATE organizations SET logo_storage_key=${logo}, updated_at=now() WHERE id=${user.organizationId}`;
-      await tx`UPDATE invoices SET organization_snapshot=jsonb_set(COALESCE(organization_snapshot, '{}'::jsonb), '{logoStorageKey}', ${tx.json(logo)}), updated_at=now() WHERE organization_id=${user.organizationId} AND status='DRAFT'`;
+    await db.transaction(async (tx) => {
+      const [organization] = await tx.update(organizations).set({ logoStorageKey: logo, updatedAt: new Date() }).where(eq(organizations.id, user.organizationId)).returning({ id: organizations.id });
+      if (!organization) throw new Error("LOGO_ORGANIZATION_NOT_FOUND");
+      const drafts = await tx.select({ id: invoices.id, snapshot: invoices.organizationSnapshot }).from(invoices).where(and(eq(invoices.organizationId, user.organizationId), eq(invoices.status, "DRAFT"))).for("update");
+      for (const draft of drafts) {
+        const snapshot = draft.snapshot && typeof draft.snapshot === "object" ? draft.snapshot : {};
+        await tx.update(invoices).set({ organizationSnapshot: { ...snapshot, logoStorageKey: logo }, updatedAt: new Date() }).where(and(eq(invoices.id, draft.id), eq(invoices.organizationId, user.organizationId), eq(invoices.status, "DRAFT")));
+      }
     });
     return NextResponse.json({ ok: true });
   } catch (error) {
+    // Log a safe error code only; never log image data, SQL parameters or credentials.
+    const cause = error && typeof error === "object" && "cause" in error ? error.cause : error;
+    const code = cause && typeof cause === "object" && "code" in cause ? String(cause.code) : "LOGO_UPLOAD_FAILED";
+    console.error("Company logo upload failed", { code });
     return NextResponse.json({ error: "Kunne ikke lagre firmalogoen." }, { status: error instanceof Error && error.message === "UNAUTHORIZED" ? 401 : 500 });
   }
 }
