@@ -153,7 +153,8 @@ h1 { font-size: clamp(28px, 3vw, 38px); line-height: 1.1; letter-spacing: -1.2px
 .invoice-parties small { display: block; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .13em; margin-bottom: 9px; }
 .invoice-parties > div > b { display: block; margin-bottom: 6px; }
 .invoice-parties > div > span { color: var(--muted); font-size: 11px; line-height: 1.6; }
-.invoice-dates { justify-self: end; width: 230px; }
+.invoice-dates { justify-self: end; width: 100%; max-width: 290px; }
+.invoice-dates b { text-align: right; overflow-wrap: anywhere; }
 .invoice-dates p { display: flex; justify-content: space-between; gap: 20px; margin: 0; padding: 4px 0; font-size: 11px; }
 .invoice-dates p span { color: var(--muted); }
 .invoice-table { border-top: 1px solid var(--line); }

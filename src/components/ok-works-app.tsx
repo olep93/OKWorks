@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { formatBankAccount } from "@/lib/bank-account-format";
 
 type User = {
   id: string;
@@ -2043,6 +2044,7 @@ function InvoiceScreen({
               </span>
             </div>
             <div className="invoice-dates">
+              <p><span>Fakturanummer</span><b>{finalized ? String(invoice.invoiceNumber) : "Tildeles ved finalisering"}</b></p>
               <p>
                 <span>Fakturadato</span>
                 <b>
@@ -2059,6 +2061,8 @@ function InvoiceScreen({
                   )}
                 </b>
               </p>
+              <p><span>Kontonummer</span><b>{formatBankAccount(invoice.bankAccountSnapshot || company.bankAccount) || "Ikke registrert"}</b></p>
+              <p><span>KID</span><b>{String(invoice.kid || (finalized ? "Ikke registrert" : "Tildeles ved finalisering"))}</b></p>
             </div>
           </div>
           <div className="invoice-table">

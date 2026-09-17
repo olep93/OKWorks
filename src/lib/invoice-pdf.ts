@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { formatBankAccount } from "./bank-account-format";
 
 type Snapshot = Record<string, unknown>;
 type Line = { description: string; quantityThousandths: number; unit: string; unitPriceOre: number; subtotalOre: number; vatBasisPoints: number };
@@ -48,9 +49,20 @@ export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachmen
   drawText("FAKTURERES TIL", margin, y, 8, true, muted);
   drawText(asText(customer.name) || "Kunde", margin, y - 18, 11, true);
   [asText(customer.address), `${asText(customer.postalCode)} ${asText(customer.city)}`.trim(), customer.organizationNumber ? `Org.nr. ${asText(customer.organizationNumber)}` : ""].filter(Boolean).forEach((value, index) => drawText(value, margin, y - 35 - index * 14, 9, false, muted));
-  drawText("Fakturadato", 365, y, 9, false, muted); drawText(date(invoice.issueDate), 472, y, 9, true);
-  drawText("Forfallsdato", 365, y - 18, 9, false, muted); drawText(date(invoice.dueDate), 472, y - 18, 9, true);
-  y -= 105;
+  const account = formatBankAccount(invoice.bankAccountSnapshot || asText(company.bankAccount));
+  const kid = asText((invoice as Invoice & { kid?: string | null }).kid);
+  const details = [
+    ["Fakturanummer", invoice.invoiceNumber === null ? "Tildeles ved finalisering" : String(invoice.invoiceNumber)],
+    ["Fakturadato", date(invoice.issueDate)],
+    ["Forfallsdato", date(invoice.dueDate)],
+    ["Kontonummer", account || "Ikke registrert"],
+    ["KID", kid || (invoice.invoiceNumber === null ? "Tildeles ved finalisering" : "Ikke registrert")],
+  ];
+  details.forEach(([label, value], index) => {
+    drawText(label, 325, y - index * 18, 8, false, muted);
+    drawText(value, width - margin - bold.widthOfTextAtSize(value, 8), y - index * 18, 8, true);
+  });
+  y -= 120;
 
   const drawTableHead = () => {
     page.drawRectangle({ x: margin, y: y - 18, width: width - margin * 2, height: 24, color: rgb(0.965, 0.975, 0.97) });
@@ -75,9 +87,6 @@ export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachmen
   drawText("MVA", totalsX, y - 20, 9, false, muted); drawText(money(invoice.vatAmountOre), 475, y - 20, 9, true);
   page.drawLine({ start: { x: totalsX, y: y - 31 }, end: { x: width - margin, y: y - 31 }, thickness: 1.5, color: forest });
   drawText("Å betale", totalsX, y - 49, 12, true); drawText(money(invoice.totalOre), 455, y - 49, 12, true);
-  const account = invoice.bankAccountSnapshot || asText(company.bankAccount);
-  if (account) drawText(`Betales til konto ${account}`, margin, 85, 9, true);
-  if ((invoice as Invoice & { kid?: string | null }).kid) drawText(`KID ${(invoice as Invoice & { kid?: string | null }).kid}`, margin, 69, 9, true);
   const contact = [asText(company.invoiceEmail) || asText(company.email), asText(company.invoicePhone) || asText(company.phone)].filter(Boolean).join("  |  ");
   drawText(contact, margin, 55, 8, false, muted);
   drawText(company.organizationNumber ? `Org.nr. ${asText(company.organizationNumber)}` : "", width - margin - 115, 55, 8, false, muted);
