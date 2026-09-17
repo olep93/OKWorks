@@ -26,7 +26,8 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 
 type User = {
   id: string;
@@ -2425,6 +2426,37 @@ function SettingsScreen({
   onboarding?: { complete: boolean; completed: number; total: number };
 }) {
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [logoBusy, setLogoBusy] = useState(false);
+  async function uploadLogo(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setError("");
+    setLogoBusy(true);
+    try {
+      if (!["image/png", "image/jpeg"].includes(file.type)) throw new Error("Velg PNG eller JPG.");
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, 1200 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, file.type, 0.85));
+      if (!blob) throw new Error("Kunne ikke behandle bildet.");
+      const body = new FormData();
+      body.append("logo", blob, file.name);
+      const response = await fetch("/api/profile/logo", { method: "POST", body });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Kunne ikke lagre logoen.");
+      await load();
+      onSaved("Firmalogo lagret. Logoen brukes på fakturautkast og nye fakturaer.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Kunne ikke laste opp logoen.");
+    } finally {
+      setLogoBusy(false);
+    }
+  }
   const [error, setError] = useState("");
   async function load() {
     const response = await fetch("/api/profile", { cache: "no-store" });
@@ -2584,13 +2616,19 @@ function SettingsScreen({
             </Field>
           </div>
           <div className="logo-placeholder">
-            <Building2 />
+            {org.logoStorageKey ? (
+              <Image src={String(org.logoStorageKey)} alt="Firmalogo" width={160} height={60} unoptimized style={{ objectFit: "contain" }} />
+            ) : <Building2 />}
             <div>
               <b>Firmalogo</b>
               <span>
-                Bildeopplasting kobles til sikker fillagring i neste steg.
+                PNG eller JPG. Logoen vises på fakturaen. Finaliserte fakturaer beholder tidligere logo.
               </span>
             </div>
+            <label className="secondary">
+              {logoBusy ? "Laster opp…" : org.logoStorageKey ? "Bytt logo" : "Last opp logo"}
+              <input type="file" accept="image/png,image/jpeg" onChange={uploadLogo} disabled={logoBusy} style={{ display: "none" }} />
+            </label>
           </div>
         </section>
         <section className="panel settings-card">

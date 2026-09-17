@@ -15,6 +15,12 @@ export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachmen
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const company = (invoice.organizationSnapshot ?? {}) as Snapshot;
   const customer = (invoice.customerSnapshot ?? {}) as Snapshot;
+  const logoData = asText(company.logoStorageKey);
+  const logo = logoData.startsWith("data:image/png;base64,")
+    ? await pdf.embedPng(logoData)
+    : logoData.startsWith("data:image/jpeg;base64,")
+      ? await pdf.embedJpg(logoData)
+      : null;
   const forest = rgb(0.055, 0.22, 0.16), muted = rgb(0.36, 0.42, 0.39), line = rgb(0.87, 0.9, 0.88), lime = rgb(0.72, 0.94, 0.34);
   const width = 595.28, height = 841.89, margin = 48;
   let page = pdf.addPage([width, height]);
@@ -22,9 +28,14 @@ export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachmen
 
   const drawText = (text: string, x: number, yy: number, size = 10, useBold = false, color = forest) => page.drawText(text.replace(/[–—]/g, "-"), { x, y: yy, size, font: useBold ? bold : regular, color });
   const drawHeader = () => {
+    if (logo) {
+      const scale = Math.min(265 / logo.width, 40 / logo.height);
+      page.drawImage(logo, { x: margin, y: height - 85, width: logo.width * scale, height: logo.height * scale });
+    } else {
     page.drawRectangle({ x: margin, y: height - 82, width: 34, height: 34, color: lime });
     drawText("OK", margin + 8, height - 70, 11, true);
     drawText(asText(company.name) || "Ditt firma", margin + 45, height - 63, 15, true);
+    }
     drawText(invoice.invoiceNumber ? `FAKTURA #${invoice.invoiceNumber}` : "FAKTURAUTKAST", width - margin - 165, height - 60, 16, true);
     if (!invoice.invoiceNumber) drawText("IKKE SENDT", width - margin - 165, height - 77, 8, true, muted);
     page.drawLine({ start: { x: margin, y: height - 99 }, end: { x: width - margin, y: height - 99 }, thickness: 2, color: forest });
