@@ -1198,6 +1198,18 @@ function OrderEntryModal({
   onSaved: () => void;
 }) {
   const [error, setError] = useState("");
+  const [catalog, setCatalog] = useState<ProfileData["products"]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(kind === "LINE");
+  const [selectedProduct, setSelectedProduct] = useState("");
+  const [lineValues, setLineValues] = useState({ title: "", unit: "stk", price: "" });
+  useEffect(() => {
+    if (kind !== "LINE") return;
+    fetch("/api/profile", { cache: "no-store" }).then(async (response) => {
+      const result = await response.json();
+      if (!response.ok) throw new Error("Kunne ikke hente standardvarer. Du kan fortsatt legge inn en linje manuelt.");
+      setCatalog(result.products ?? []);
+    }).catch((error) => setError(error.message)).finally(() => setCatalogLoading(false));
+  }, [kind]);
   const [route, setRoute] = useState({
     origin: "",
     destination: "",
@@ -1306,6 +1318,18 @@ function OrderEntryModal({
         </div>
         <form onSubmit={submit}>
           <div className="form-grid">
+            {kind === "LINE" && <Field label="Velg standard vare eller tjeneste" wide>
+              <select value={selectedProduct} disabled={catalogLoading} onChange={(event) => {
+                const id = event.target.value;
+                setSelectedProduct(id);
+                const product = catalog.find((item) => item.id === id);
+                setLineValues(product ? { title: product.name, unit: product.unit, price: String(product.defaultPriceOre / 100) } : { title: "", unit: "stk", price: "" });
+              }}>
+                <option value="">{catalogLoading ? "Henter hurtigvalg…" : "Egendefinert linje / velg hurtigvalg"}</option>
+                {catalog.map((product) => <option key={product.id} value={product.id}>{product.name} · {(product.defaultPriceOre / 100).toLocaleString("nb-NO")} kr/{product.unit}</option>)}
+              </select>
+              {!catalogLoading && !catalog.length && <small>Ingen hurtigvalg ennå. Opprett dem under Produkter og tjenester.</small>}
+            </Field>}
             <Field label="Dato">
               <input
                 name="workDate"
@@ -1330,10 +1354,11 @@ function OrderEntryModal({
               <input
                 name="title"
                 defaultValue={
-                  kind === "DRIVING"
+                  kind === "LINE" ? undefined : kind === "DRIVING"
                     ? `${route.origin} – ${route.destination}`
                     : ""
                 }
+                {...(kind === "LINE" ? { value: lineValues.title, onChange: (event: ChangeEvent<HTMLInputElement>) => setLineValues({ ...lineValues, title: event.target.value }) } : {})}
                 key={
                   kind === "DRIVING"
                     ? `${route.origin}-${route.destination}`
@@ -1354,13 +1379,15 @@ function OrderEntryModal({
                   />
                 </Field>
                 <Field label="Enhet">
-                  <input name="unit" defaultValue="stk" required />
+                  <input name="unit" value={lineValues.unit} onChange={(event) => setLineValues({ ...lineValues, unit: event.target.value })} required />
                 </Field>
-                <Field label="Pris per enhet (kr)">
+                <Field label="Pris per enhet (kr eks. MVA)">
                   <input
                     name="unitRateOre"
                     type="number"
                     step="0.01"
+                    value={lineValues.price}
+                    onChange={(event) => setLineValues({ ...lineValues, price: event.target.value })}
                     required
                   />
                 </Field>
@@ -1484,7 +1511,7 @@ function OrderEntryModal({
             <button type="button" className="secondary" onClick={onClose}>
               Avbryt
             </button>
-            <button className="primary">Last opp og lagre</button>
+            <button className="primary">{financial ? "Lagre registrering" : "Last opp og lagre"}</button>
           </div>
         </form>
       </section>
