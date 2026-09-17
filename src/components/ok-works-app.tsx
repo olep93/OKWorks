@@ -961,6 +961,8 @@ function OrderDetails({
   >([]);
   const [deleting, setDeleting] = useState(false);
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
+  const [deletingRegistration, setDeletingRegistration] = useState<string | null>(null);
+  const [registrationError, setRegistrationError] = useState("");
   const [editingRegistration, setEditingRegistration] = useState<EditableRegistration | null>(null);
   const [extraEntries, setExtraEntries] = useState<ExtraEntry[]>([]);
   const [showTime, setShowTime] = useState(false);
@@ -996,6 +998,20 @@ function OrderDetails({
         sum + Math.round((entry.minutes / 60) * entry.ratePerHourOre),
       0,
     ) + extraEntries.reduce((sum, entry) => sum + entry.amountOre, 0);
+  async function deleteRegistration(entry: { id: string; title: string; kind: string; type: "TIME" | "EXTRA" }) {
+    if (deletingRegistration) return;
+    const detail = entry.kind === "HOTEL" ? " Automatisk opprettet utreise og hjemreise for dette hotellet slettes også. Annen kjøring beholdes." : "";
+    if (!window.confirm(`Slette «${entry.title}» helt fra ordren? Eventuelle vedlegg på linjen slettes også, og fakturautkastet oppdateres.${detail} Dette kan ikke angres.`)) return;
+    setDeletingRegistration(entry.id);
+    setRegistrationError("");
+    try {
+      const response = await fetch(`/api/orders/${order.id}/registrations`, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: entry.id, type: entry.type }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Kunne ikke slette linjen.");
+      await loadEntries();
+    } catch (error) { setRegistrationError(error instanceof Error ? error.message : "Kunne ikke slette linjen."); }
+    finally { setDeletingRegistration(null); }
+  }
   async function createInvoice() {
     if (generatingInvoice) return;
     setGeneratingInvoice(true);
@@ -1106,6 +1122,7 @@ function OrderDetails({
         </button>
         <span>Fakturautkast slettes sammen med ordren. Finaliserte fakturaer beskyttes.</span>
       </div>
+      {registrationError && <p className="form-error" role="alert">{registrationError}</p>}
       {timeEntries.length || extraEntries.length ? (
         <section className="panel time-list">
           <div className="panel-head">
@@ -1130,6 +1147,7 @@ function OrderDetails({
                 {formatMoney(Math.round(entry.minutes / 60 * entry.ratePerHourOre))}
               </strong>
               <button className="secondary" disabled={["INVOICED", "CLOSED", "CANCELLED"].includes(order.status)} onClick={() => setEditingRegistration({ id: entry.id, type: "TIME", kind: "TIME", workDate: entry.workDate, title: "Timer", description: entry.description, quantity: entry.minutes / 60, rateOre: entry.ratePerHourOre, amountOre: Math.round(entry.minutes / 60 * entry.ratePerHourOre) })}>Rediger</button>
+              <button className="danger-button" disabled={Boolean(deletingRegistration) || ["INVOICED", "CLOSED", "CANCELLED"].includes(order.status)} onClick={() => void deleteRegistration({ id: entry.id, title: entry.description || "Timer", kind: "TIME", type: "TIME" })}><Trash2 />{deletingRegistration === entry.id ? "Sletter…" : "Slett"}</button>
             </div>
           ))}
           {extraEntries.map((entry) => (
@@ -1149,6 +1167,7 @@ function OrderDetails({
                   : ["IMAGE", "DOCUMENT"].includes(entry.kind) ? "Dokumentert" : formatMoney(0)}
               </strong>
               <button className="secondary" disabled={["INVOICED", "CLOSED", "CANCELLED"].includes(order.status)} onClick={() => setEditingRegistration({ ...entry, type: "EXTRA", quantity: (entry.quantityThousandths ?? 1000) / 1000, rateOre: entry.unitRateOre ?? 0 })}>Rediger</button>
+              <button className="danger-button" disabled={Boolean(deletingRegistration) || ["INVOICED", "CLOSED", "CANCELLED"].includes(order.status)} onClick={() => void deleteRegistration({ ...entry, type: "EXTRA" })}><Trash2 />{deletingRegistration === entry.id ? "Sletter…" : "Slett"}</button>
             </div>
           ))}
         </section>
