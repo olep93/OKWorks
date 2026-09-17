@@ -17,6 +17,7 @@ export async function POST(request: Request) {
   if (!(await verifyPassword(parsed.data.password, user.passwordHash))) {
     return NextResponse.json({ error: "Ugyldig e-post eller passord." }, { status: 401 });
   }
+  if (user.verificationRequired && !user.emailVerifiedAt) return NextResponse.json({ needsVerification: true, message: "Bekreft e-postadressen før du logger inn. Du kan be om en ny lenke." });
   await createSession(user.id);
   return NextResponse.json({ ok: true });
 }

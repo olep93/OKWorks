@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, isNotNull, or } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { authSessions, organizationMembers, users } from "@/lib/db/schema";
 import { db } from "@/lib/db/client";
@@ -60,7 +60,7 @@ export async function getCurrentUser() {
   }).from(authSessions)
     .innerJoin(users, eq(authSessions.userId, users.id))
     .innerJoin(organizationMembers, eq(organizationMembers.userId, users.id))
-    .where(and(eq(authSessions.tokenHash, tokenHash(token)), gt(authSessions.expiresAt, new Date()), eq(organizationMembers.active, true)))
+    .where(and(eq(authSessions.tokenHash, tokenHash(token)), gt(authSessions.expiresAt, new Date()), eq(organizationMembers.active, true), or(eq(users.verificationRequired, false), isNotNull(users.emailVerifiedAt))))
     .limit(1);
   return rows[0] ?? null;
 }

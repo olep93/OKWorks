@@ -200,6 +200,7 @@ function Login({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
     "email",
   );
   const [email, setEmail] = useState("");
+  const [verificationMessage, setVerificationMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -242,6 +243,11 @@ function Login({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Noe gikk galt.");
+      if (data.needsVerification) {
+        setVerificationMessage(data.message);
+        setStep("email");
+        return;
+      }
       if (step === "email") {
         setStep(data.needsSetup ? "setup" : "password");
         return;
@@ -346,6 +352,7 @@ function Login({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
               />
             </label>
           )}
+          {verificationMessage && <p role="status">{verificationMessage} <a href="/account/verify">Send ny bekreftelseslenke</a></p>}
           {step === "password" && <a href="/account/forgot">Glemt passord?</a>}
           {step === "register" && (
             <label className="terms-row">

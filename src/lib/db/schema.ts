@@ -60,6 +60,9 @@ export const users = pgTable("users", {
   resetTokenHash: varchar("reset_token_hash", { length: 64 }),
   resetExpiresAt: timestamp("reset_expires_at", { withTimezone: true }),
   emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  verificationRequired: boolean("verification_required").notNull().default(false),
+  verificationTokenHash: varchar("verification_token_hash", { length: 64 }),
+  verificationExpiresAt: timestamp("verification_expires_at", { withTimezone: true }),
   ...timestamps,
 }, (table) => [uniqueIndex("users_email_unique").on(table.email)]);
 

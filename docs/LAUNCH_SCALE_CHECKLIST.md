@@ -11,7 +11,7 @@ Status 17.09.2026: krav og innledende kodegjennomgang, ikke godkjent for 10 000 
 
 ## P0: kontosikkerhet og e-post
 
-Registreringsruten setter i dag `email_verified_at = now()` uten e-postbevis. Dette må erstattes med faktisk bekreftelse før offentlig selvregistrering.
+Registreringsruten krever nå faktisk e-postbekreftelse for nye kontoer og oppretter ikke innloggingssesjon før bekreftelse. Eksisterende testkontoer er beholdt uten retroaktiv sperring; dette er en overgangsordning, ikke bevis på verifisert e-post. Produksjonsflyten må fortsatt testes før offentlig selvregistrering.
 
 - Bekreftelses- og passordtilbakestillingstokens: kryptografisk tilfeldige, hash i database, utløp og atomisk engangsbruk.
 - Glemt passord gir samme svar for eksisterende og ukjente adresser. Begrens forsøk og e-postsending i delt lagring, ikke bare prosessminne.
@@ -20,7 +20,7 @@ Registreringsruten setter i dag `email_verified_at = now()` uten e-postbevis. De
 - Ved utsendelsesfeil: tydelig ny utsending, ikke erklære e-post bekreftet.
 - Førstegangsoppsett og tenant-isolasjon testes ende til ende med to separate firmaer.
 
-Delstatus: passordtilbakestilling er implementert med 30 minutters engangslenke, hash i database og atomisk tilbakekalling av gamle sesjoner. Kodekontroller og enhetstester er bestått. Resend-nøkkel/avsender, produksjonsmigrering og faktisk e-postflyt må verifiseres før funksjonen regnes som ferdig. Se `password-recovery.md`. E-postbekreftelse ved registrering gjenstår; dette er ikke et fullført kontooppsett.
+Delstatus: passordtilbakestilling er implementert med 30 minutters engangslenke, hash i database og atomisk tilbakekalling av gamle sesjoner. E-postbekreftelse har 24 timers engangslenke, manuell bekreftelsesknapp og ny utsending. Nye kontoer får `verification_required = true`; login og sesjonsoppslag håndhever dette. Resend-nøkkel/avsender, produksjonsmigrering og faktisk e-postflyt må verifiseres før funksjonene regnes som ferdige. Se `password-recovery.md` og `email-verification.md`. Dette er ikke et fullført kontooppsett.
 
 ## P0: abonnement og avtale
 
