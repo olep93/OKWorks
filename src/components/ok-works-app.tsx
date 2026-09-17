@@ -2302,7 +2302,6 @@ function BankScreen() {
 function ProductsScreen({ onSaved }: { onSaved: (message: string) => void }) {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [error, setError] = useState("");
-  const [busyId, setBusyId] = useState<string | null>(null);
 
   async function load() {
     const response = await fetch("/api/profile", { cache: "no-store" });
@@ -2353,24 +2352,6 @@ function ProductsScreen({ onSaved }: { onSaved: (message: string) => void }) {
     onSaved("Varen eller tjenesten er lagt til");
   }
 
-  async function deleteProduct(id: string, name: string) {
-    if (!window.confirm(`Slette «${name}» fra hurtigvalgene?`)) return;
-    setBusyId(id);
-    setError("");
-    const response = await fetch(`/api/products?id=${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      setError(result.error ?? "Kunne ikke slette varen eller tjenesten.");
-      setBusyId(null);
-      return;
-    }
-    await load();
-    setBusyId(null);
-    onSaved("Varen eller tjenesten er slettet");
-  }
-
   return (
     <>
       <div className="page-heading">
@@ -2415,9 +2396,7 @@ function ProductsScreen({ onSaved }: { onSaved: (message: string) => void }) {
                     {(product.defaultPriceOre / 100).toLocaleString("nb-NO")} kr / {product.unit} · {product.vatBasisPoints / 100}% MVA
                   </span>
                 </div>
-                <button className="danger-button" onClick={() => void deleteProduct(product.id, product.name)} disabled={busyId === product.id}>
-                  <Trash2 />{busyId === product.id ? "Sletter…" : "Slett"}
-                </button>
+                <ProductActions product={product} onSaved={async (message) => { await load(); onSaved(message); }} />
               </div>
             ))}
           </div>
@@ -2782,6 +2761,7 @@ function SettingsScreen({
                   {(product.defaultPriceOre / 100).toLocaleString("nb-NO")} kr /{" "}
                   {product.unit} · {product.vatBasisPoints / 100}% MVA
                 </span>
+                <ProductActions product={product} onSaved={async (message) => { await load(); onSaved(message); }} />
               </div>
             ))}
           </div>
@@ -2792,6 +2772,55 @@ function SettingsScreen({
         )}
       </section>
     </>
+  );
+}
+
+function ProductActions({ product, onSaved }: { product: ProfileData["products"][number]; onSaved: (message: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    await mutate("PATCH", { ...values, id: product.id, priceOre: Math.round(Number(values.priceOre) * 100), vatBasisPoints: Math.round(Number(values.vatBasisPoints) * 100) });
+  }
+  async function mutate(method: "PATCH" | "DELETE", body?: Record<string, unknown>) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(method === "DELETE" ? `/api/products?id=${encodeURIComponent(product.id)}` : "/api/products", { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Kunne ikke lagre endringen.");
+      setEditing(false);
+      await onSaved(method === "DELETE" ? "Varen eller tjenesten er slettet" : "Varen eller tjenesten er oppdatert");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Noe gikk galt.");
+    } finally { setBusy(false); }
+  }
+  return (
+    <div className="product-actions">
+      <button type="button" className="secondary" disabled={busy} onClick={() => { setError(""); setEditing(true); }}>Rediger</button>
+      <button type="button" className="danger-button" disabled={busy} onClick={() => { if (window.confirm(`Slette «${product.name}» fra hurtigvalgene? Eksisterende ordre og fakturaer endres ikke.`)) void mutate("DELETE"); }}><Trash2 />Slett</button>
+      {error && !editing && <p className="form-error" role="alert">{error}</p>}
+      {editing && (
+        <div className="modal-backdrop">
+          <section className="entry-modal" role="dialog" aria-modal="true" aria-label="Rediger vare eller tjeneste">
+            <div className="modal-head"><h2>Rediger vare eller tjeneste</h2><button type="button" className="icon-button" aria-label="Lukk" disabled={busy} onClick={() => setEditing(false)}><X /></button></div>
+            <form onSubmit={save}>
+              <div className="form-grid">
+                <Field label="Navn" wide><input name="name" defaultValue={product.name} minLength={2} required /></Field>
+                <Field label="Kategori"><input name="category" defaultValue={product.category ?? ""} /></Field>
+                <Field label="Enhet"><input name="unit" defaultValue={product.unit} required /></Field>
+                <Field label="Pris (kr)"><input name="priceOre" type="number" min="0" step="0.01" defaultValue={product.defaultPriceOre / 100} required /></Field>
+                <Field label="MVA (%)"><input name="vatBasisPoints" type="number" min="0" max="100" step="0.01" defaultValue={product.vatBasisPoints / 100} required /></Field>
+              </div>
+              {error && <p className="form-error" role="alert">{error}</p>}
+              <div className="modal-actions"><button type="button" className="secondary" disabled={busy} onClick={() => setEditing(false)}>Avbryt</button><button className="primary" disabled={busy}>{busy ? "Lagrer…" : "Lagre endringer"}</button></div>
+            </form>
+          </section>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
@@ -23,7 +23,7 @@ export async function GET() {
     const [[organization], [settings], productRows] = await Promise.all([
       db.select().from(organizations).where(eq(organizations.id, user.organizationId)).limit(1),
       db.select().from(organizationSettings).where(eq(organizationSettings.organizationId, user.organizationId)).limit(1),
-      db.select().from(products).where(eq(products.organizationId, user.organizationId)),
+      db.select().from(products).where(and(eq(products.organizationId, user.organizationId), eq(products.active, true))),
     ]);
     return NextResponse.json({ organization, settings, products: productRows });
   } catch { return NextResponse.json({ error: "Ikke innlogget." }, { status: 401 }); }
