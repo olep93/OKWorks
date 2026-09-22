@@ -53,7 +53,7 @@ export async function POST(
       );
     const apiKey = process.env.RESEND_API_KEY;
     const from =
-      process.env.INVOICE_FROM_EMAIL ?? "OK Works Test <onboarding@resend.dev>";
+      process.env.INVOICE_FROM_EMAIL ?? "OKFaktura Test <onboarding@resend.dev>";
     if (!apiKey)
       return NextResponse.json(
         {
@@ -160,7 +160,7 @@ export async function GET(
       configured: Boolean(process.env.RESEND_API_KEY),
       from:
         process.env.INVOICE_FROM_EMAIL ??
-        "OK Works Test <onboarding@resend.dev>",
+        "OKFaktura Test <onboarding@resend.dev>",
     });
   } catch {
     return NextResponse.json({ error: "Ikke innlogget." }, { status: 401 });

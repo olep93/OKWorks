@@ -213,6 +213,6 @@ export async function buildInvoicePdf(invoice: Invoice, lines: Line[], attachmen
   const pages = pdf.getPages();
   pages.forEach((pdfPage, index) => pdfPage.drawText(`Side ${index + 1} av ${pages.length}`, { x: width / 2 - 22, y: 30, size: 7, font: regular, color: muted }));
   pdf.setTitle(invoice.invoiceNumber ? `Faktura ${invoice.invoiceNumber}` : "Fakturautkast");
-  pdf.setCreator("OK Works");
+  pdf.setCreator("OKFaktura");
   return pdf.save();
 }

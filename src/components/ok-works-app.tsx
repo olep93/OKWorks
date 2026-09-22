@@ -190,7 +190,7 @@ export function OkWorksApp() {
     return (
       <div className="loading-screen">
         <div className="brand-mark">OK</div>
-        <p>Laster OK Works…</p>
+        <p>Laster OKFaktura…</p>
       </div>
     );
   if (!user) return <Login onAuthenticated={setUser} />;
@@ -270,7 +270,7 @@ function Login({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
         <div className="auth-brand">
           <div className="brand-mark">OK</div>
           <div>
-            <h1>OK Works</h1>
+            <h1>OKFaktura</h1>
             <p>Fra utført jobb til fakturert</p>
           </div>
         </div>
@@ -504,7 +504,7 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
         <div className="brand">
           <div className="brand-mark">OK</div>
           <div>
-            <div className="brand-name">OK Works</div>
+            <div className="brand-name">OKFaktura</div>
             <small>Din arbeidsportal</small>
           </div>
         </div>
@@ -589,7 +589,7 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
             {menuOpen ? <X /> : <Menu />}
           </button>
           <div className="crumb">
-            OK Works&nbsp;&nbsp;/&nbsp;&nbsp;
+            OKFaktura&nbsp;&nbsp;/&nbsp;&nbsp;
             <strong>
               {screen === "dashboard"
                 ? "Dashboard"
@@ -2477,7 +2477,7 @@ function BankScreen() {
             <p>
               {active
                 ? `Konto ${active.account_number_masked ?? ""} er klar for avstemming.`
-                : "OK Works bruker en sikker PSD2-leverandør. BankID gjennomføres hos banken; vi lagrer aldri BankID-passord eller koder."}
+                : "OKFaktura bruker en sikker PSD2-leverandør. BankID gjennomføres hos banken; vi lagrer aldri BankID-passord eller koder."}
             </p>
           </div>
           <span className={`bank-state ${active ? "connected" : ""}`}>
