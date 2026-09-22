@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock3,
+  CreditCard,
   Download,
   FileText,
   Hotel,
@@ -29,6 +30,7 @@ import {
 } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { formatBankAccount } from "@/lib/bank-account-format";
 import { formatMoney, formatQuantity, formatDate, localDate } from "@/lib/format";
 import { summarizeInvoiceLines } from "@/lib/invoice-summary";
@@ -556,6 +558,10 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
             <Settings />
             Innstillinger
           </button>
+          <Link className="nav-button" href="/account/subscription">
+            <CreditCard />
+            Abonnement (test)
+          </Link>
         </nav>
         <div className="sidebar-bottom">
           <div className="user-card">

@@ -24,6 +24,8 @@ Delstatus: passordtilbakestilling er implementert med 30 minutters engangslenke,
 
 ## P0: abonnement og avtale
 
+Delstatus: Stripe Checkout, signaturverifisert webhook, hendelseslogg, idempotente testforsøk, server-verifisert testpris og Customer Portal er implementert bak en streng testmodus. Ingen portaltilgang avhenger av abonnementet, og live-nøkler avvises. Se `subscription-sandbox.md`. Stripe-konto, testprodukt, test-webhook og ende-til-ende-test er ikke konfigurert. Dette er ikke godkjenning for ekte betaling.
+
 - Betalingsleverandør med hosted checkout, tilbakevendende NOK-belastning og verifisert utbetalingskonto. Ikke lagre kortinformasjon i OK Works.
 - Signerte webhooks, varig hendelseslogg, duplikatvern og håndtering av hendelser ute av rekkefølge. Redirect fra checkout er ikke betalingsbevis.
 - Oppsigelse, betalingsfeil, eventuell betalingsfrist og tilgang etter oppsigelse må defineres. Bevar nødvendig eksport/arkivtilgang.
