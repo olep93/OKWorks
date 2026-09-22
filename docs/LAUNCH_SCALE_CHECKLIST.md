@@ -52,7 +52,7 @@ Før godkjent kapasitet:
 - Mål p50/p95/p99, feilrate, CPU/minne, DB-forbindelser og køtid. Foreløpig mål: p95 under 1 sekund for normale liste-/endreoperasjoner og under 2 sekunder for login ved avtalt samtidighet; må verifiseres, ikke lovet.
 - Backup og faktisk restore-test; definert RPO/RTO. Fakturaarkiv skal ikke forsvinne ved kontosletting uten vurdert oppbevaringsplikt.
 - Feilovervåking, tenant-sikker logging, leverandørkvoter og budsjettvarsler. Regn kostnader for Vercel, Neon, lagring, e-post, Maps/DIB og betaling mot 99-kronersprisen.
-- Domene/HTTPS, DNS, SPF/DKIM/DMARC og e-postleverbarhet testes før migrering fra testadressen. Domene, HTTPS, DNS-autentisering, begrenset Resend-nøkkel og en vellykket passordmail er bekreftet 22.09.2026. Faktisk postkasse, meldingshodekontroll og fakturasending med PDF gjenstår. Se `domain-email-production.md`.
+- Domene/HTTPS, DNS, SPF/DKIM/DMARC og e-postleverbarhet testes før migrering fra testadressen. Domene, HTTPS, DNS-autentisering, begrenset Resend-nøkkel, faktisk postkasse og en vellykket passordmail er bekreftet 22.09.2026. Mottakstest, meldingshodekontroll og fakturasending med PDF gjenstår. Se `domain-email-production.md`.
 
 ## Kilder som må holdes oppdatert
 
