@@ -38,6 +38,7 @@ import Link from "next/link";
 import { formatBankAccount } from "@/lib/bank-account-format";
 import { formatMoney, formatQuantity, formatDate, localDate } from "@/lib/format";
 import { summarizeInvoiceLines } from "@/lib/invoice-summary";
+import { invoiceArchiveLabel, invoiceArchiveTone } from "@/lib/invoice-status";
 
 type User = {
   id: string;
@@ -1955,6 +1956,7 @@ function InvoicesScreen({ onOpen }: { onOpen: (id: string) => void }) {
       status: string;
       totalOre: number;
       dueDate: string | null;
+      sentAt: string | null;
       customerName: string;
       orderNumber: number;
       orderTitle: string;
@@ -1971,16 +1973,7 @@ function InvoicesScreen({ onOpen }: { onOpen: (id: string) => void }) {
         setLoading(false);
       });
   }, []);
-  const label = (invoice: (typeof rows)[number]) =>
-    invoice.status === "PAID"
-      ? "Betalt"
-      : invoice.status === "DRAFT"
-        ? "Utkast"
-        : invoice.dueDate && new Date(invoice.dueDate) < new Date()
-          ? "Forfalt"
-          : invoice.status === "PARTIALLY_PAID"
-            ? "Delbetalt"
-            : "Ikke betalt";
+  const label = (invoice: (typeof rows)[number]) => invoiceArchiveLabel(invoice);
   const visible = rows.filter((invoice) => {
     const status = label(invoice);
     const matchesFilter = filter === "ALL" || status === filter;
@@ -2014,7 +2007,8 @@ function InvoicesScreen({ onOpen }: { onOpen: (id: string) => void }) {
           >
             <option value="ALL">Alle statuser</option>
             <option>Utkast</option>
-            <option>Ikke betalt</option>
+            <option>Finalisert – ikke sendt</option>
+            <option>Sendt – ikke betalt</option>
             <option>Forfalt</option>
             <option>Delbetalt</option>
             <option>Betalt</option>
@@ -2044,7 +2038,7 @@ function InvoicesScreen({ onOpen }: { onOpen: (id: string) => void }) {
                 {formatMoney(invoice.totalOre)}
               </strong>
               <em
-                className={`payment-${label(invoice).toLowerCase().replace(" ", "-")}`}
+                className={`payment-${invoiceArchiveTone(label(invoice))}`}
               >
                 {label(invoice)}
               </em>
@@ -2106,13 +2100,17 @@ function InvoiceScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showSend, setShowSend] = useState(false);
+  const [deliveries, setDeliveries] = useState<Array<{ id: string; recipient: string; subject: string; status: string; error_message: string | null; sent_at: string | null; created_at: string }>>([]);
   async function load() {
-    const [invoiceResponse, checkResponse] = await Promise.all([
+    const [invoiceResponse, checkResponse, deliveryResponse] = await Promise.all([
       fetch(`/api/invoices/${invoiceId}`, { cache: "no-store" }),
       fetch(`/api/invoices/${invoiceId}/preflight`, { cache: "no-store" }),
+      fetch(`/api/invoices/${invoiceId}/send`, { cache: "no-store" }),
     ]);
     setData(await invoiceResponse.json());
     setPreflight(await checkResponse.json());
+    const deliveryData = await deliveryResponse.json();
+    setDeliveries(deliveryData.deliveries ?? []);
   }
   useEffect(() => {
     Promise.all([
@@ -2122,9 +2120,11 @@ function InvoiceScreen({
       fetch(`/api/invoices/${invoiceId}/preflight`, {
         cache: "no-store",
       }).then((r) => r.json()),
-    ]).then(([invoiceData, checkData]) => {
+      fetch(`/api/invoices/${invoiceId}/send`, { cache: "no-store" }).then((r) => r.json()),
+    ]).then(([invoiceData, checkData, deliveryData]) => {
       setData(invoiceData);
       setPreflight(checkData);
+      setDeliveries(deliveryData.deliveries ?? []);
     });
   }, [invoiceId]);
   if (!data?.invoice)
@@ -2420,6 +2420,17 @@ function InvoiceScreen({
                     </button>
                   </form>
                 )}
+                <div className="delivery-history">
+                  <b>Utsendingshistorikk</b>
+                  {deliveries.length ? deliveries.map((delivery) => (
+                    <div key={delivery.id} className={`delivery-row delivery-${delivery.status.toLowerCase()}`}>
+                      <span>{delivery.status === "SENT" ? "Sendt" : delivery.status === "FAILED" ? "Feilet" : "Venter"}</span>
+                      <strong>{delivery.recipient}</strong>
+                      <small>{formatDate(delivery.sent_at || delivery.created_at)} · {delivery.subject}</small>
+                      {delivery.error_message && <small className="form-error">{delivery.error_message}</small>}
+                    </div>
+                  )) : <span>Ingen utsendinger registrert ennå.</span>}
+                </div>
               </>
             ) : (
               <>
