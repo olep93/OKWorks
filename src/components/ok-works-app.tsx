@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowRight,
   AlertTriangle,
   Banknote,
   Building2,
@@ -22,7 +23,10 @@ import {
   Package,
   Plus,
   Receipt,
+  Route,
+  Send,
   Settings,
+  ShieldCheck,
   Sparkles,
   Trash2,
   Users,
@@ -193,13 +197,111 @@ export function OkWorksApp() {
         <p>Laster OKFaktura…</p>
       </div>
     );
-  if (!user) return <Login onAuthenticated={setUser} />;
+  if (!user) return <PublicHome onAuthenticated={setUser} />;
   return <Portal user={user} onLogout={() => setUser(null)} />;
 }
 
-function Login({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
+function PublicHome({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
+  const [authMode, setAuthMode] = useState<"email" | "register" | null>(null);
+  const openAuth = (mode: "email" | "register") => setAuthMode(mode);
+  return (
+    <main className="public-home">
+      <header className="public-nav">
+        <a className="public-logo" href="#top" aria-label="OKFaktura forsiden">
+          <span className="brand-mark">OK</span>
+          <strong>OKFaktura</strong>
+        </a>
+        <nav aria-label="Forsidenavigasjon">
+          <a href="#slik-fungerer-det">Slik fungerer det</a>
+          <a href="#funksjoner">Funksjoner</a>
+          <a href="#pris">Pris</a>
+        </nav>
+        <div className="public-nav-actions">
+          <button className="public-login" onClick={() => openAuth("email")}>Logg inn</button>
+          <button className="public-cta small" onClick={() => openAuth("register")}>Prøv nå</button>
+        </div>
+      </header>
+
+      <section className="public-hero" id="top">
+        <div className="public-hero-copy">
+          <span className="public-pill"><Sparkles /> Jobben gjort. Fakturaen nesten ferdig.</span>
+          <h1>Fra utført jobb til faktura — uten kontorkvelden.</h1>
+          <p>Registrer timer, kjøring, hotell, utlegg og bilder mens du jobber. OKFaktura samler alt til en ryddig faktura med dokumentasjonen kunden trenger.</p>
+          <div className="public-hero-actions">
+            <button className="public-cta" onClick={() => openAuth("register")}>Opprett konto <ArrowRight /></button>
+            <a className="public-secondary" href="#slik-fungerer-det">Se hvordan det virker</a>
+          </div>
+          <div className="public-proof"><ShieldCheck /> Norsk fakturaflyt · Sikker innlogging · Ingen kort ved oppstart</div>
+        </div>
+
+        <div className="product-demo" aria-label="Animert eksempel på hvordan en ordre blir til faktura">
+          <div className="demo-window">
+            <div className="demo-toolbar"><i /><i /><i /><span>Ordre #1042 · Serviceoppdrag</span></div>
+            <div className="demo-body">
+              <div className="demo-sidebar"><b>OK</b><span /><span /><span /></div>
+              <div className="demo-workspace">
+                <div className="demo-title"><div><small>DAGENS ORDRE</small><strong>Ventilasjon · Runway</strong></div><em>Åpen</em></div>
+                <div className="demo-chips">
+                  <span className="demo-chip time"><Clock3 /> 4,5 timer</span>
+                  <span className="demo-chip drive"><Route /> 86 km</span>
+                  <span className="demo-chip receipt"><Receipt /> 2 utlegg</span>
+                  <span className="demo-chip photo"><Camera /> 6 bilder</span>
+                </div>
+                <div className="demo-invoice">
+                  <div className="demo-paper-head"><b>OK</b><span>FAKTURAUTKAST</span></div>
+                  <div className="demo-lines"><i /><i /><i /></div>
+                  <div className="demo-total"><span>Å betale</span><strong>8 743,–</strong></div>
+                </div>
+                <div className="demo-send"><Send /> Klar til sending <CheckCircle2 /></div>
+              </div>
+            </div>
+          </div>
+          <div className="demo-float demo-float-one"><Camera /><span><b>Dokumentasjon lagret</b><small>Før- og etterbilder</small></span></div>
+          <div className="demo-float demo-float-two"><CheckCircle2 /><span><b>Fakturagrunnlag klart</b><small>Alt samlet automatisk</small></span></div>
+        </div>
+      </section>
+
+      <section className="public-strip" aria-label="Hovedfordeler">
+        <span>Én ordre</span><i /> <span>Alt arbeidsgrunnlag</span><i /> <span>Profesjonell faktura</span><i /> <span>Ryddig vedlegg</span>
+      </section>
+
+      <section className="public-section" id="slik-fungerer-det">
+        <div className="public-section-head"><span className="eyebrow">En enklere arbeidsflyt</span><h2>Du gjør jobben. Vi holder orden på resten.</h2><p>Bygget for små bedrifter og folk som vil bruke mindre tid på administrasjon.</p></div>
+        <div className="public-steps">
+          <article><span>01</span><Clock3 /><h3>Registrer underveis</h3><p>Legg inn timer, materiell, kjøring, diett, hotell og utlegg direkte på ordren.</p></article>
+          <article><span>02</span><Camera /><h3>Dokumenter jobben</h3><p>Last opp bilder og kvitteringer. De organiseres i et ryddig fakturavedlegg.</p></article>
+          <article><span>03</span><Send /><h3>Kontroller og send</h3><p>Se fakturaen, kontroller grunnlaget og send PDF-en direkte til kunden.</p></article>
+        </div>
+      </section>
+
+      <section className="public-feature-section" id="funksjoner">
+        <div className="feature-copy"><span className="eyebrow">Mer enn en fakturamal</span><h2>Hele historien bak beløpet følger med.</h2><p>Kunden får en oversiktlig førsteside og et detaljert vedlegg med kjøring, utlegg, hotell og bildedokumentasjon.</p><ul><li><CheckCircle2 /> Automatisk summering av arbeidsgrunnlaget</li><li><CheckCircle2 /> Kunde- og produktregister</li><li><CheckCircle2 /> Fakturaarkiv og betalingsstatus</li><li><CheckCircle2 /> Firmalogo, satser og standardtjenester</li></ul></div>
+        <div className="feature-stack"><div className="feature-sheet back"><span>DOKUMENTASJON</span><i /><i /><i /></div><div className="feature-sheet front"><div><b>OK</b><span>FAKTURA</span></div><h3>8 743,–</h3><p>Forfall 14 dager</p><i /><i /><i /></div></div>
+      </section>
+
+      <section className="public-price" id="pris">
+        <div><span className="eyebrow">Enkelt fra start</span><h2>Alt du trenger for 99 kr/mnd.</h2><p>Prisen er inkl. eventuell MVA. Abonnement aktiveres først når tjenesten åpner for betaling.</p></div>
+        <button className="public-cta" onClick={() => openAuth("register")}>Opprett konto i dag <ArrowRight /></button>
+      </section>
+
+      <footer className="public-footer"><div className="public-logo"><span className="brand-mark">OK</span><strong>OKFaktura</strong></div><p>Fra utført jobb til fakturert.</p><button onClick={() => openAuth("email")}>Logg inn</button></footer>
+
+      {authMode && (
+        <div className="auth-modal" role="dialog" aria-modal="true" aria-label={authMode === "register" ? "Opprett konto" : "Logg inn"}>
+          <button className="auth-modal-backdrop" aria-label="Lukk" onClick={() => setAuthMode(null)} />
+          <div className="auth-modal-panel">
+            <button className="auth-modal-close" aria-label="Lukk" onClick={() => setAuthMode(null)}><X /></button>
+            <Login onAuthenticated={onAuthenticated} initialStep={authMode} embedded />
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
+
+function Login({ onAuthenticated, initialStep = "email", embedded = false }: { onAuthenticated: (user: User) => void; initialStep?: "email" | "register"; embedded?: boolean }) {
   const [step, setStep] = useState<"email" | "password" | "setup" | "register">(
-    "email",
+    initialStep,
   );
   const [email, setEmail] = useState("");
   const [verificationMessage, setVerificationMessage] = useState("");
@@ -265,7 +367,7 @@ function Login({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
     }
   }
   return (
-    <main className="auth-page">
+    <main className={embedded ? "auth-page embedded" : "auth-page"}>
       <section className="auth-card">
         <div className="auth-brand">
           <div className="brand-mark">OK</div>
@@ -611,6 +713,17 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
             </strong>
           </div>
         </header>
+        {!loading && data.onboarding && !data.onboarding.complete && screen !== "settings" && (
+          <button className="setup-reminder" onClick={() => navigate("settings")}>
+            <span className="setup-reminder-icon"><AlertTriangle /></span>
+            <span>
+              <b>Fullfør firmaoppsettet</b>
+              <small>{data.onboarding.missing?.slice(0, 3).join(", ")}{(data.onboarding.missing?.length ?? 0) > 3 ? ` +${(data.onboarding.missing?.length ?? 0) - 3} til` : ""} mangler før første faktura.</small>
+            </span>
+            <strong>{data.onboarding.completed}/{data.onboarding.total}</strong>
+            <ArrowRight />
+          </button>
+        )}
         <div className="content">
           {loading ? (
             <div className="empty-state">
