@@ -2427,7 +2427,7 @@ function InvoiceScreen({
                   <b>Utsendingshistorikk</b>
                   {deliveries.length ? deliveries.map((delivery) => (
                     <div key={delivery.id} className={`delivery-row delivery-${delivery.status.toLowerCase()}`}>
-                      <span>{delivery.status === "SENT" ? "Sendt" : delivery.status === "FAILED" ? "Feilet" : "Venter"}</span>
+                      <span>{{ SENT: "Sendt", DELIVERED: "Levert", DELAYED: "Forsinket", BOUNCED: "Avvist", COMPLAINED: "Spamrapport", FAILED: "Feilet", SUPPRESSED: "Blokkert", PENDING: "Venter" }[delivery.status] ?? delivery.status}</span>
                       <strong>{delivery.recipient}</strong>
                       <small>{formatDate(delivery.sent_at || delivery.created_at)} · {delivery.subject}</small>
                       {delivery.error_message && <small className="form-error">{delivery.error_message}</small>}

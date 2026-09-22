@@ -340,3 +340,6 @@ h1 { font-size: clamp(28px, 3vw, 38px); line-height: 1.1; letter-spacing: -1.2px
 .delivery-row strong { overflow-wrap: anywhere; font-size: 12px; }
 .delivery-row small { grid-column: 1 / -1; color: var(--muted); font-size: 10px; }
 .delivery-row.delivery-failed > span { background: #ffe0dc; color: #9d271d; }
+.delivery-row.delivery-delivered > span { background: #d9f4df; color: #176b35; }
+.delivery-row.delivery-bounced > span, .delivery-row.delivery-complained > span, .delivery-row.delivery-suppressed > span { background: #ffe0dc; color: #9d271d; }
+.delivery-row.delivery-delayed > span { background: #fff1bd; color: #795700; }
