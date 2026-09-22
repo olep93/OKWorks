@@ -2112,8 +2112,8 @@ function InvoiceScreen({
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [showSend, setShowSend] = useState(false);
-  const [deliveries, setDeliveries] = useState<Array<{ id: string; recipient: string; subject: string; status: string; error_message: string | null; sent_at: string | null; created_at: string }>>([]);
+  const [sendMode, setSendMode] = useState<"INVOICE" | "REMINDER" | null>(null);
+  const [deliveries, setDeliveries] = useState<Array<{ id: string; recipient: string; subject: string; delivery_type: string; status: string; error_message: string | null; sent_at: string | null; created_at: string }>>([]);
   async function load() {
     const [invoiceResponse, checkResponse, deliveryResponse] = await Promise.all([
       fetch(`/api/invoices/${invoiceId}`, { cache: "no-store" }),
@@ -2222,7 +2222,7 @@ function InvoiceScreen({
     const value = await response.json();
     if (!response.ok) setError(value.error ?? "Kunne ikke sende fakturaen.");
     else {
-      setShowSend(false);
+      setSendMode(null);
       await load();
     }
     setBusy(false);
@@ -2261,11 +2261,24 @@ function InvoiceScreen({
             invoice.status !== "VOID" && (
               <button
                 className="secondary"
-                onClick={() => setShowSend(!showSend)}
+                onClick={() => setSendMode(sendMode === "INVOICE" ? null : "INVOICE")}
                 disabled={busy}
               >
                 <FileText />
-                Send faktura
+                {sent ? "Send faktura på nytt" : "Send faktura"}
+              </button>
+            )}
+          {sent &&
+            invoice.status !== "PAID" &&
+            invoice.status !== "VOID" &&
+            invoice.status !== "CREDITED" && (
+              <button
+                className="secondary"
+                onClick={() => setSendMode(sendMode === "REMINDER" ? null : "REMINDER")}
+                disabled={busy}
+              >
+                <Send />
+                Send betalingspåminnelse
               </button>
             )}
           {finalized &&
@@ -2405,8 +2418,16 @@ function InvoiceScreen({
                     <span>Registreringene og fakturanummeret er låst.</span>
                   </div>
                 </div>
-                {showSend && (
+                {sendMode && (
                   <form className="send-form" onSubmit={sendInvoice}>
+                    <input type="hidden" name="deliveryType" value={sendMode} />
+                    <div className="secure-note">
+                      <Send />
+                      <div>
+                        <b>{sendMode === "REMINDER" ? "Betalingspåminnelse" : sent ? "Send faktura på nytt" : "Send faktura"}</b>
+                        <span>{sendMode === "REMINDER" ? "Ingen gebyrer eller endringer i fakturabeløpet legges til." : "PDF med faktura og dokumentasjon følger vedlagt."}</span>
+                      </div>
+                    </div>
                     <Field label="Mottaker">
                       <input
                         name="recipient"
@@ -2418,7 +2439,8 @@ function InvoiceScreen({
                     <Field label="Emne">
                       <input
                         name="subject"
-                        defaultValue={`Faktura ${String(invoice.invoiceNumber)} fra ${String(company.name ?? "firma")}`}
+                        key={`subject-${sendMode}`}
+                        defaultValue={sendMode === "REMINDER" ? `Påminnelse om faktura ${String(invoice.invoiceNumber)} fra ${String(company.name ?? "firma")}` : `Faktura ${String(invoice.invoiceNumber)} fra ${String(company.name ?? "firma")}`}
                         required
                       />
                     </Field>
@@ -2426,13 +2448,14 @@ function InvoiceScreen({
                       <textarea
                         name="message"
                         rows={6}
-                        defaultValue={`Hei,\n\nDu har mottatt en faktura fra ${String(company.name ?? "firmaet")} på ${(Number(invoice.totalOre) / 100).toLocaleString("nb-NO")} kr. Faktura og dokumentasjonsvedlegg følger vedlagt.\n\nMed vennlig hilsen\n${String(company.name ?? "")}`}
+                        key={`message-${sendMode}`}
+                        defaultValue={sendMode === "REMINDER" ? `Hei,\n\nDette er en vennlig påminnelse om faktura ${String(invoice.invoiceNumber)} fra ${String(company.name ?? "firmaet")}. Gjenstående beløp er ${(Number(invoice.remainingAmountOre ?? invoice.totalOre) / 100).toLocaleString("nb-NO")} kr, med forfall ${formatDate(String(invoice.dueDate))}.\n\nDersom fakturaen allerede er betalt, kan du se bort fra denne meldingen. Fakturaen følger vedlagt.\n\nMed vennlig hilsen\n${String(company.name ?? "")}` : `Hei,\n\nDu har mottatt en faktura fra ${String(company.name ?? "firmaet")} på ${(Number(invoice.totalOre) / 100).toLocaleString("nb-NO")} kr. Faktura og dokumentasjonsvedlegg følger vedlagt.\n\nMed vennlig hilsen\n${String(company.name ?? "")}`}
                         required
                       />
                     </Field>
                     {error && <p className="form-error">{error}</p>}
                     <button className="primary full" disabled={busy}>
-                      {busy ? "Sender…" : "Send faktura med vedlegg"}
+                      {busy ? "Sender…" : sendMode === "REMINDER" ? "Send påminnelse med faktura" : "Send faktura med vedlegg"}
                     </button>
                   </form>
                 )}
@@ -2440,7 +2463,7 @@ function InvoiceScreen({
                   <b>Utsendingshistorikk</b>
                   {deliveries.length ? deliveries.map((delivery) => (
                     <div key={delivery.id} className={`delivery-row delivery-${delivery.status.toLowerCase()}`}>
-                      <span>{{ SENT: "Sendt", DELIVERED: "Levert", DELAYED: "Forsinket", BOUNCED: "Avvist", COMPLAINED: "Spamrapport", FAILED: "Feilet", SUPPRESSED: "Blokkert", PENDING: "Venter" }[delivery.status] ?? delivery.status}</span>
+                      <span>{delivery.delivery_type === "REMINDER" ? "Påminnelse" : "Faktura"} · {{ SENT: "Sendt", DELIVERED: "Levert", DELAYED: "Forsinket", BOUNCED: "Avvist", COMPLAINED: "Spamrapport", FAILED: "Feilet", SUPPRESSED: "Blokkert", PENDING: "Venter" }[delivery.status] ?? delivery.status}</span>
                       <strong>{delivery.recipient}</strong>
                       <small>{formatDate(delivery.sent_at || delivery.created_at)} · {delivery.subject}</small>
                       {delivery.error_message && <small className="form-error">{delivery.error_message}</small>}

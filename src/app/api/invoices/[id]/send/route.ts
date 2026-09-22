@@ -11,6 +11,7 @@ const input = z.object({
   recipient: z.email(),
   subject: z.string().trim().min(3).max(300),
   message: z.string().trim().min(3).max(5000),
+  deliveryType: z.enum(["INVOICE", "REMINDER"]).default("INVOICE"),
 });
 
 export async function POST(
@@ -49,6 +50,11 @@ export async function POST(
     if (["PAID", "VOID", "CREDITED"].includes(invoice.status))
       return NextResponse.json(
         { error: "Fakturaen kan ikke sendes i denne statusen." },
+        { status: 409 },
+      );
+    if (parsed.data.deliveryType === "REMINDER" && !invoice.sentAt)
+      return NextResponse.json(
+        { error: "Fakturaen må være sendt før du kan sende en betalingspåminnelse." },
         { status: 409 },
       );
     const apiKey = process.env.RESEND_API_KEY;
@@ -103,13 +109,13 @@ export async function POST(
     );
     const pdf = await buildInvoicePdf(invoice, lines, attachments, attachmentRows);
     const delivery =
-      await sqlClient`INSERT INTO invoice_deliveries (organization_id, invoice_id, recipient, subject, message, sent_by) VALUES (${user.organizationId}, ${id}, ${parsed.data.recipient}, ${parsed.data.subject}, ${parsed.data.message}, ${user.id}) RETURNING id`;
+      await sqlClient`INSERT INTO invoice_deliveries (organization_id, invoice_id, recipient, subject, message, delivery_type, sent_by) VALUES (${user.organizationId}, ${id}, ${parsed.data.recipient}, ${parsed.data.subject}, ${parsed.data.message}, ${parsed.data.deliveryType}, ${user.id}) RETURNING id`;
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
-        "Idempotency-Key": `invoice-${id}-delivery-${delivery[0].id}`,
+        "Idempotency-Key": `invoice-${id}-${parsed.data.deliveryType.toLowerCase()}-${delivery[0].id}`,
       },
       body: JSON.stringify({
         from,
@@ -134,8 +140,11 @@ export async function POST(
     }
     await sqlClient.begin(async (tx) => {
       await tx`UPDATE invoice_deliveries SET status='SENT', provider_message_id=${String(result.id)}, sent_at=now() WHERE id=${delivery[0].id}`;
-      await tx`UPDATE invoices SET status='SENT', sent_at=now(), updated_at=now() WHERE id=${id}`;
-      await tx`UPDATE orders SET status='INVOICED', updated_at=now() WHERE id=${invoice.sourceOrderId} AND organization_id=${user.organizationId}`;
+      if (parsed.data.deliveryType === "INVOICE") {
+        await tx`UPDATE invoices SET status='SENT', sent_at=COALESCE(sent_at, now()), updated_at=now() WHERE id=${id}`;
+        await tx`UPDATE orders SET status='INVOICED', updated_at=now() WHERE id=${invoice.sourceOrderId} AND organization_id=${user.organizationId}`;
+      }
+      await tx`INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, metadata) VALUES (${user.organizationId}, ${user.id}, ${parsed.data.deliveryType === "REMINDER" ? "INVOICE_REMINDER_SENT" : "INVOICE_SENT"}, 'INVOICE', ${id}, ${JSON.stringify({ recipient: parsed.data.recipient, deliveryId: delivery[0].id })}::jsonb)`;
     });
     return NextResponse.json({ ok: true, sentAt: new Date().toISOString() });
   } catch {
@@ -154,7 +163,7 @@ export async function GET(
     const user = await requireUser();
     const { id } = await context.params;
     const deliveries =
-      await sqlClient`SELECT id, recipient, subject, status, error_message, sent_at, created_at FROM invoice_deliveries WHERE invoice_id=${id} AND organization_id=${user.organizationId} ORDER BY created_at DESC`;
+      await sqlClient`SELECT id, recipient, subject, delivery_type, status, error_message, sent_at, created_at FROM invoice_deliveries WHERE invoice_id=${id} AND organization_id=${user.organizationId} ORDER BY created_at DESC`;
     return NextResponse.json({
       deliveries,
       configured: Boolean(process.env.RESEND_API_KEY),
