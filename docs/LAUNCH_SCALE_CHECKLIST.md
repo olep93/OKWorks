@@ -2,6 +2,17 @@
 
 Status 17.09.2026: krav og innledende kodegjennomgang, ikke godkjent for 10 000 brukere eller ekte abonnementsbetaling.
 
+## Stabilisering 22.09.2026 (kveld)
+
+- Utsendingshistorikk vises også på testutkast, med mottaker, emne, tidspunkt og leverandørstatus. Vellykket sending gir en synlig bekreftelse; «sendt» skilles eksplisitt fra «levert».
+- Ny utsending beholder delbetalt/betalt status. En betaling som registreres mens e-postleverandøren arbeider, skal heller ikke få fakturaen eller en lukket ordre gjenåpnet.
+- Forfallsvisning bruker hele forfallsdagen i Europe/Oslo. Usendte, annullerte og krediterte fakturaer merkes ikke som forfalt.
+- Nettverksfeil ved sending, finalisering og betalingsregistrering frigjør knappene og viser feil. Feil ved innlasting av faktura gir en vei tilbake i stedet for endeløs lasting.
+- Nye automatiserte sendetester dekker firmafilter, utløpt sesjon, blokkering av ordinær sending av utkast, test-PDF med dokumentasjon, sperrede statuser, påminnelse før sending, bevaring av betalingsstatus og leverandøravvisning.
+- Dette er avgrensede regresjonstester, ikke en komplett sikkerhetsrevisjon eller ende-til-ende-test mellom to ekte firmaer. Ingen ekte e-poster sendes av testene.
+
+Neste publiseringsporter: testerfeedback og separat firma-/tilgangstest; leveringswebhook og feilmåling; verifiser de eksternt håndterte løpene for paginering, privat objektlagring og jobbkø; deretter lasttest og restore-test. Abonnement er fortsatt deaktivert, og 10 000-brukerkapasitet er ikke verifisert.
+
 ## Avklaringer før betalingsaktivering
 
 - Juridisk selger, organisasjonsnummer, kontaktadresse og utbetalingskonto må avklares og verifiseres hos betalingsleverandør. Domenet kan eies privat; det fastsetter ikke hvem som selger tjenesten.

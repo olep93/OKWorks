@@ -146,16 +146,21 @@ export async function POST(
     await sqlClient.begin(async (tx) => {
       await tx`UPDATE invoice_deliveries SET status='SENT', provider_message_id=${String(result.id)}, sent_at=now() WHERE id=${delivery[0].id}`;
       if (parsed.data.deliveryType === "INVOICE") {
-        await tx`UPDATE invoices SET status='SENT', sent_at=COALESCE(sent_at, now()), updated_at=now() WHERE id=${id}`;
-        await tx`UPDATE orders SET status='INVOICED', updated_at=now() WHERE id=${invoice.sourceOrderId} AND organization_id=${user.organizationId}`;
+        // Sending is not a payment event. Preserve payment state, including
+        // payments registered while the email provider was processing the send.
+        await tx`UPDATE invoices SET status=CASE WHEN status='FINALIZED' THEN 'SENT' ELSE status END, sent_at=COALESCE(sent_at, now()), updated_at=now() WHERE id=${id} AND organization_id=${user.organizationId}`;
+        await tx`UPDATE orders SET status='INVOICED', updated_at=now() WHERE id=${invoice.sourceOrderId} AND organization_id=${user.organizationId} AND status!='CLOSED'`;
       }
       const action = parsed.data.deliveryType === "REMINDER" ? "INVOICE_REMINDER_SENT" : parsed.data.deliveryType === "TEST_DRAFT" ? "INVOICE_TEST_DRAFT_SENT" : "INVOICE_SENT";
       await tx`INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, metadata) VALUES (${user.organizationId}, ${user.id}, ${action}, 'INVOICE', ${id}, ${JSON.stringify({ recipient: parsed.data.recipient, deliveryId: delivery[0].id })}::jsonb)`;
     });
     return NextResponse.json({ ok: true, sentAt: new Date().toISOString() });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Økten er utløpt. Logg inn igjen." }, { status: 401 });
+    }
     return NextResponse.json(
-      { error: "Kunne ikke sende fakturaen." },
+      { error: "Kunne ikke bekrefte utsendingen. Kontroller utsendingshistorikken før du prøver igjen." },
       { status: 500 },
     );
   }

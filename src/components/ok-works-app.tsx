@@ -768,6 +768,7 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
             <InvoicesScreen onOpen={openInvoice} />
           ) : screen === "invoice" && selectedInvoiceId ? (
             <InvoiceScreen
+              key={selectedInvoiceId}
               invoiceId={selectedInvoiceId}
               onBack={() => navigate("invoices")}
               onReset={async (orderId) => { await refresh(); openOrder(orderId); }}
@@ -2134,6 +2135,7 @@ function InvoiceScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sendMode, setSendMode] = useState<"INVOICE" | "REMINDER" | "TEST_DRAFT" | null>(null);
+  const [sendNotice, setSendNotice] = useState("");
   const [deliveries, setDeliveries] = useState<Array<{ id: string; recipient: string; subject: string; delivery_type: string; status: string; error_message: string | null; sent_at: string | null; created_at: string }>>([]);
   async function load() {
     const [invoiceResponse, checkResponse, deliveryResponse] = await Promise.all([
@@ -2141,30 +2143,41 @@ function InvoiceScreen({
       fetch(`/api/invoices/${invoiceId}/preflight`, { cache: "no-store" }),
       fetch(`/api/invoices/${invoiceId}/send`, { cache: "no-store" }),
     ]);
+    if (!invoiceResponse.ok || !checkResponse.ok || !deliveryResponse.ok) {
+      throw new Error("Kunne ikke hente oppdatert fakturastatus. Last siden på nytt.");
+    }
     setData(await invoiceResponse.json());
     setPreflight(await checkResponse.json());
     const deliveryData = await deliveryResponse.json();
     setDeliveries(deliveryData.deliveries ?? []);
   }
   useEffect(() => {
+    let active = true;
+    const read = async (response: Response) => {
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error ?? "Kunne ikke hente fakturaen.");
+      return value;
+    };
     Promise.all([
-      fetch(`/api/invoices/${invoiceId}`, { cache: "no-store" }).then((r) =>
-        r.json(),
-      ),
+      fetch(`/api/invoices/${invoiceId}`, { cache: "no-store" }).then(read),
       fetch(`/api/invoices/${invoiceId}/preflight`, {
         cache: "no-store",
-      }).then((r) => r.json()),
-      fetch(`/api/invoices/${invoiceId}/send`, { cache: "no-store" }).then((r) => r.json()),
+      }).then(read),
+      fetch(`/api/invoices/${invoiceId}/send`, { cache: "no-store" }).then(read),
     ]).then(([invoiceData, checkData, deliveryData]) => {
+      if (!active) return;
       setData(invoiceData);
       setPreflight(checkData);
       setDeliveries(deliveryData.deliveries ?? []);
+    }).catch((error) => {
+      if (active) setError(error instanceof Error ? error.message : "Kunne ikke hente fakturaen.");
     });
+    return () => { active = false; };
   }, [invoiceId]);
   if (!data?.invoice)
     return (
       <section className="panel empty-state">
-        <p>Laster fakturautkast…</p>
+        {error ? <><p className="form-error" role="alert">{error}</p><button className="secondary" onClick={onBack}>Tilbake til fakturaer</button></> : <p>Laster fakturautkast…</p>}
       </section>
     );
   const invoice = data.invoice;
@@ -2189,64 +2202,79 @@ function InvoiceScreen({
     } finally { setBusy(false); }
   }
   async function finalize() {
+    if (busy) return;
     setBusy(true);
     setError("");
-    const response = await fetch(`/api/invoices/${invoiceId}/finalize`, {
-      method: "POST",
-    });
-    const value = await response.json();
-    if (!response.ok) {
-      setError(value.error ?? "Kunne ikke finalisere fakturaen.");
-      setPreflight(value.preflight ?? preflight);
-      setBusy(false);
-      return;
-    }
-    await load();
-    setConfirmed(false);
-    setBusy(false);
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}/finalize`, { method: "POST" });
+      const value = await response.json();
+      if (!response.ok) {
+        setPreflight(value.preflight ?? preflight);
+        throw new Error(value.error ?? "Kunne ikke finalisere fakturaen.");
+      }
+      await load();
+      setConfirmed(false);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Kunne ikke bekrefte finalisering. Last siden på nytt for å kontrollere status.");
+    } finally { setBusy(false); }
   }
   async function registerPayment() {
+    if (busy) return;
     const remaining = Number(invoice.remainingAmountOre ?? invoice.totalOre);
     const entered = window.prompt(
       "Innbetalt beløp i kroner",
       String(remaining / 100),
     );
     if (!entered) return;
-    const amountOre = Math.round(Number(entered.replace(",", ".")) * 100);
-    if (!Number.isFinite(amountOre) || amountOre <= 0) return;
+    const amountOre = Math.round(Number(entered.replace(/\s/g, "").replace(",", ".")) * 100);
+    if (!Number.isSafeInteger(amountOre) || amountOre <= 0) {
+      setError("Skriv et gyldig positivt beløp, for eksempel 1 250,50.");
+      return;
+    }
     setBusy(true);
-    const response = await fetch(`/api/invoices/${invoiceId}/payments`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        amountOre,
-        paidAt: new Date().toISOString().slice(0, 10),
-      }),
-    });
-    const value = await response.json();
-    if (!response.ok) setError(value.error);
-    else await load();
-    setBusy(false);
+    setError("");
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}/payments`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ amountOre, paidAt: new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Oslo" }).format(new Date()) }),
+      });
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error ?? "Kunne ikke registrere betalingen.");
+      await load();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Kunne ikke bekrefte betalingen. Last siden på nytt og kontroller restbeløpet før du prøver igjen.");
+    } finally { setBusy(false); }
   }
   async function sendInvoice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError("");
+    setSendNotice("");
     const values = Object.fromEntries(
       new FormData(event.currentTarget).entries(),
     );
-    const response = await fetch(`/api/invoices/${invoiceId}/send`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(values),
-    });
-    const value = await response.json();
-    if (!response.ok) setError(value.error ?? "Kunne ikke sende fakturaen.");
-    else {
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}/send`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error ?? "Kunne ikke sende fakturaen.");
       setSendMode(null);
-      await load();
+      setSendNotice(`E-posten til ${String(values.recipient)} er akseptert for sending med PDF-vedlegg. Dette er ikke en bekreftelse på levering til innboksen.`);
+      try {
+        await load();
+      } catch {
+        setError("E-posten er sendt, men historikken kunne ikke oppdateres. Last siden på nytt – ikke send på nytt.");
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Kunne ikke bekrefte utsendingen. Kontroller historikken før du prøver igjen.");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
   return (
     <div className="invoice-view">
@@ -2429,6 +2457,8 @@ function InvoiceScreen({
             </div>
           </div>
           <div className="invoice-check-body">
+            {sendNotice && <p className="secure-note" role="status">{sendNotice}</p>}
+            {error && <p className="form-error" role="alert">{error}</p>}
             {finalized ? (
               <>
                 <div className="secure-note">
@@ -2475,23 +2505,11 @@ function InvoiceScreen({
                         required
                       />
                     </Field>
-                    {error && <p className="form-error">{error}</p>}
                     <button className="primary full" disabled={busy}>
                       {busy ? "Sender…" : sendMode === "REMINDER" ? "Send påminnelse med faktura" : "Send faktura med vedlegg"}
                     </button>
                   </form>
                 )}
-                <div className="delivery-history">
-                  <b>Utsendingshistorikk</b>
-                  {deliveries.length ? deliveries.map((delivery) => (
-                    <div key={delivery.id} className={`delivery-row delivery-${delivery.status.toLowerCase()}`}>
-                      <span>{delivery.delivery_type === "REMINDER" ? "Påminnelse" : delivery.delivery_type === "TEST_DRAFT" ? "Testutkast" : "Faktura"} · {{ SENT: "Sendt", DELIVERED: "Levert", DELAYED: "Forsinket", BOUNCED: "Avvist", COMPLAINED: "Spamrapport", FAILED: "Feilet", SUPPRESSED: "Blokkert", PENDING: "Venter" }[delivery.status] ?? delivery.status}</span>
-                      <strong>{delivery.recipient}</strong>
-                      <small>{formatDate(delivery.sent_at || delivery.created_at)} · {delivery.subject}</small>
-                      {delivery.error_message && <small className="form-error">{delivery.error_message}</small>}
-                    </div>
-                  )) : <span>Ingen utsendinger registrert ennå.</span>}
-                </div>
               </>
             ) : (
               <>
@@ -2511,7 +2529,6 @@ function InvoiceScreen({
                     <Field label="Melding">
                       <textarea name="message" rows={6} defaultValue={`Hei,\n\nDette er et testutkast fra ${String(company.name ?? "firmaet")} for kontroll av faktura og dokumentasjonsvedlegg. Dette er ikke et betalingskrav og skal ikke betales.\n\nMed vennlig hilsen\n${String(company.name ?? "")}`} required />
                     </Field>
-                    {error && <p className="form-error">{error}</p>}
                     <button className="primary full" disabled={busy}>{busy ? "Sender…" : "Send testutkast med vedlegg"}</button>
                   </form>
                 )}
@@ -2558,7 +2575,6 @@ function InvoiceScreen({
                     låses.
                   </span>
                 </label>
-                {error && <p className="form-error">{error}</p>}
                 <button
                   className="primary full"
                   onClick={finalize}
@@ -2568,6 +2584,18 @@ function InvoiceScreen({
                 </button>
               </>
             )}
+            <div className="delivery-history">
+              <b>Utsendingshistorikk</b>
+              <small>«Sendt» betyr akseptert av e-postleverandøren. «Levert» krever leveringsbekreftelse.</small>
+              {deliveries.length ? deliveries.map((delivery) => (
+                <div key={delivery.id} className={`delivery-row delivery-${delivery.status.toLowerCase()}`}>
+                  <span>{delivery.delivery_type === "REMINDER" ? "Påminnelse" : delivery.delivery_type === "TEST_DRAFT" ? "Testutkast" : "Faktura"} · {{ SENT: "Sendt", DELIVERED: "Levert", DELAYED: "Forsinket", BOUNCED: "Avvist", COMPLAINED: "Spamrapport", FAILED: "Feilet", SUPPRESSED: "Blokkert", PENDING: "Venter" }[delivery.status] ?? delivery.status}</span>
+                  <strong>{delivery.recipient}</strong>
+                  <small>{new Date(delivery.sent_at || delivery.created_at).toLocaleString("nb-NO", { timeZone: "Europe/Oslo" })} · {delivery.subject}</small>
+                  {delivery.error_message && <small className="form-error">{delivery.error_message}</small>}
+                </div>
+              )) : <span>Ingen utsendinger registrert ennå.</span>}
+            </div>
           </div>
         </aside>
       </div>

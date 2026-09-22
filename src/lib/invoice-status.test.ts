@@ -22,4 +22,16 @@ describe("invoice archive status", () => {
     expect(invoiceArchiveTone("Finalisert – ikke sendt")).toBe("ikke-sendt");
     expect(invoiceArchiveTone("Sendt – ikke betalt")).toBe("ikke-betalt");
   });
+
+  it("keeps invoices current for the entire Norwegian due date", () => {
+    const invoice = { status: "SENT", dueDate: "2026-09-22" };
+    expect(invoiceArchiveLabel(invoice, new Date("2026-09-22T21:59:59Z"))).toBe("Sendt – ikke betalt");
+    expect(invoiceArchiveLabel(invoice, new Date("2026-09-22T22:00:00Z"))).toBe("Forfalt");
+  });
+
+  it("does not label unsent or cancelled invoices as overdue", () => {
+    expect(invoiceArchiveLabel({ status: "FINALIZED", dueDate: "2026-01-01" }, now)).toBe("Finalisert – ikke sendt");
+    expect(invoiceArchiveLabel({ status: "VOID", dueDate: "2026-01-01" }, now)).toBe("Annullert");
+    expect(invoiceArchiveLabel({ status: "CREDITED", dueDate: "2026-01-01" }, now)).toBe("Kreditert");
+  });
 });
