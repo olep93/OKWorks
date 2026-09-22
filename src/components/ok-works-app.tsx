@@ -11,7 +11,6 @@ import {
   ChevronRight,
   ClipboardList,
   Clock3,
-  CreditCard,
   Download,
   FileText,
   Hotel,
@@ -34,7 +33,6 @@ import {
 } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { formatBankAccount } from "@/lib/bank-account-format";
 import { formatMoney, formatQuantity, formatDate, localDate } from "@/lib/format";
 import { summarizeInvoiceLines } from "@/lib/invoice-summary";
@@ -222,11 +220,11 @@ function PublicHome({ onAuthenticated }: { onAuthenticated: (user: User) => void
         <nav aria-label="Forsidenavigasjon">
           <a href="#slik-fungerer-det">Slik fungerer det</a>
           <a href="#funksjoner">Funksjoner</a>
-          <a href="#pris">Pris</a>
+          <a href="#pris">Prøv gratis</a>
         </nav>
         <div className="public-nav-actions">
           <button className="public-login" onClick={() => openAuth("email")}>Logg inn</button>
-          <button className="public-cta small" onClick={() => openAuth("register")}>Prøv nå</button>
+          <button className="public-cta small" onClick={() => openAuth("register")}>Prøv gratis</button>
         </div>
       </header>
 
@@ -236,7 +234,7 @@ function PublicHome({ onAuthenticated }: { onAuthenticated: (user: User) => void
           <h1>Fra utført jobb til faktura — uten kontorkvelden.</h1>
           <p>Registrer timer, kjøring, hotell, utlegg og bilder mens du jobber. OKFaktura samler alt til en ryddig faktura med dokumentasjonen kunden trenger.</p>
           <div className="public-hero-actions">
-            <button className="public-cta" onClick={() => openAuth("register")}>Opprett konto <ArrowRight /></button>
+            <button className="public-cta" onClick={() => openAuth("register")}>Prøv gratis <ArrowRight /></button>
             <a className="public-secondary" href="#slik-fungerer-det">Se hvordan det virker</a>
           </div>
           <div className="public-proof"><ShieldCheck /> Norsk fakturaflyt · Sikker innlogging · Ingen kort ved oppstart</div>
@@ -288,8 +286,8 @@ function PublicHome({ onAuthenticated }: { onAuthenticated: (user: User) => void
       </section>
 
       <section className="public-price" id="pris">
-        <div><span className="eyebrow">Enkelt fra start</span><h2>Alt du trenger for 99 kr/mnd.</h2><p>Prisen er inkl. eventuell MVA. Abonnement aktiveres først når tjenesten åpner for betaling.</p></div>
-        <button className="public-cta" onClick={() => openAuth("register")}>Opprett konto i dag <ArrowRight /></button>
+        <div><span className="eyebrow">Enkelt fra start</span><h2>Prøv OKFaktura gratis.</h2><p>Opprett konto og test hele arbeidsflyten. Du trenger ikke betalingskort.</p></div>
+        <button className="public-cta" onClick={() => openAuth("register")}>Prøv gratis i dag <ArrowRight /></button>
       </section>
 
       <footer className="public-footer"><div className="public-logo"><span className="brand-mark">OK</span><strong>OKFaktura</strong></div><p>Fra utført jobb til fakturert.</p><button onClick={() => openAuth("email")}>Logg inn</button></footer>
@@ -668,10 +666,6 @@ function Portal({ user, onLogout }: { user: User; onLogout: () => void }) {
             <Settings />
             Innstillinger
           </button>
-          <Link className="nav-button" href="/account/subscription">
-            <CreditCard />
-            Abonnement (test)
-          </Link>
         </nav>
         <div className="sidebar-bottom">
           <div className="user-card">
