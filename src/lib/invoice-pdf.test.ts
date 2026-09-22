@@ -35,4 +35,23 @@ describe("invoice PDF", () => {
     const bytes = await buildInvoicePdf(invoice, lines, [], [{ kind: "HOTEL", title: "Hotell", description: "Opphold", workDate: "2026-09-17", fileName: null, mimeType: null, fileData: null, amountOre: 10000, metadata: { hotelAddress: "Gate 1", startDate: "2026-09-17", endDate: "2026-09-20" } }]);
     expect((await PDFDocument.load(bytes)).getPageCount()).toBe(2);
   });
+  it("builds one complete appendix with travel, expenses, images and a source PDF", async () => {
+    const png = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"));
+    const source = await PDFDocument.create();
+    source.addPage([300, 400]);
+    const sourcePdf = await source.save();
+    const registrations = [
+      { kind: "IMAGE", title: "Før arbeid", description: "Kontrollbilde før oppstart", workDate: "2026-09-15", fileName: "for.png", mimeType: "image/png", fileData: png, amountOre: 0, metadata: {} },
+      { kind: "EXPENSE", title: "Materiellutlegg", description: "Kvittering vedlagt", workDate: "2026-09-15", fileName: "kvittering.png", mimeType: "image/png", fileData: png, amountOre: 25000, metadata: {} },
+      { kind: "HOTEL", title: "Hotell", description: "To netter", workDate: "2026-09-15", fileName: "hotell.png", mimeType: "image/png", fileData: png, amountOre: 240000, metadata: { hotelAddress: "Hotellveien 1", startDate: "2026-09-15", endDate: "2026-09-17" } },
+      { kind: "DRIVING", title: "Utreise", description: "Kundebesøk", workDate: "2026-09-15", fileName: null, mimeType: null, fileData: null, amountOre: 72000, quantityThousandths: 120000, unit: "km", unitRateOre: 600, metadata: { origin: "Firmaadresse 1", destination: "Kundeadresse 2", tollOre: 4800, tollInputGross: true } },
+      { kind: "DIET", title: "Diett", description: "Dagsats", workDate: "2026-09-15", fileName: null, mimeType: null, fileData: null, amountOre: 45000, metadata: {} },
+      { kind: "DOCUMENT", title: "Arbeidsrapport", description: "Signert rapport", workDate: "2026-09-17", fileName: "rapport.pdf", mimeType: "application/pdf", fileData: sourcePdf, amountOre: 0, metadata: {} },
+    ];
+    const bytes = await buildInvoicePdf(invoice, lines, registrations.filter((item): item is typeof item & { fileData: Uint8Array } => Boolean(item.fileData)).map((item) => ({ title: item.title, description: item.description, workDate: item.workDate, fileName: item.fileName, mimeType: item.mimeType, fileData: item.fileData })), registrations);
+    const result = await PDFDocument.load(bytes);
+    expect(result.getPageCount()).toBeGreaterThanOrEqual(3);
+    expect(result.getTitle()).toBe("Faktura 1001");
+    expect(result.getCreator()).toBe("OKFaktura");
+  });
 });

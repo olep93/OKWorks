@@ -20,7 +20,7 @@ Registreringsruten krever nå faktisk e-postbekreftelse for nye kontoer og oppre
 - Ved utsendelsesfeil: tydelig ny utsending, ikke erklære e-post bekreftet.
 - Førstegangsoppsett og tenant-isolasjon testes ende til ende med to separate firmaer.
 
-Delstatus: passordtilbakestilling er implementert med 30 minutters engangslenke, hash i database og atomisk tilbakekalling av gamle sesjoner. E-postbekreftelse har 24 timers engangslenke, manuell bekreftelsesknapp og ny utsending. Nye kontoer får `verification_required = true`; login og sesjonsoppslag håndhever dette. Begrenset Resend-nøkkel og produksjonsavsender er satt opp, og glemt-passord-meldingen ble levert til kontrollert Gmail-mottaker 22.09.2026. Nyregistrering/aktivering og faktura med PDF-vedlegg må fortsatt ende-til-ende-testes. Se `password-recovery.md` og `email-verification.md`.
+Delstatus: passordtilbakestilling er implementert med 30 minutters engangslenke, hash i database og atomisk tilbakekalling av gamle sesjoner. E-postbekreftelse har 24 timers engangslenke, manuell bekreftelsesknapp og ny utsending. Nye kontoer får `verification_required = true`; login og sesjonsoppslag håndhever dette. Begrenset Resend-nøkkel og produksjonsavsender er satt opp. Glemt-passord-meldingen, toveis postkassetest og en kontrollert fakturautsending med PDF-vedlegg ble levert 22.09.2026. Nyregistrering/aktivering må fortsatt ende-til-ende-testes med en separat testkonto og tenant. Se `password-recovery.md`, `email-verification.md` og `domain-email-production.md`.
 
 ## P0: abonnement og avtale
 
@@ -52,7 +52,7 @@ Før godkjent kapasitet:
 - Mål p50/p95/p99, feilrate, CPU/minne, DB-forbindelser og køtid. Foreløpig mål: p95 under 1 sekund for normale liste-/endreoperasjoner og under 2 sekunder for login ved avtalt samtidighet; må verifiseres, ikke lovet.
 - Backup og faktisk restore-test; definert RPO/RTO. Fakturaarkiv skal ikke forsvinne ved kontosletting uten vurdert oppbevaringsplikt.
 - Feilovervåking, tenant-sikker logging, leverandørkvoter og budsjettvarsler. Regn kostnader for Vercel, Neon, lagring, e-post, Maps/DIB og betaling mot 99-kronersprisen.
-- Domene/HTTPS, DNS, SPF/DKIM/DMARC og e-postleverbarhet testes før migrering fra testadressen. Domene, HTTPS, DNS-autentisering, begrenset Resend-nøkkel, faktisk postkasse og en vellykket passordmail er bekreftet 22.09.2026. Mottakstest, meldingshodekontroll og fakturasending med PDF gjenstår. Se `domain-email-production.md`.
+- Domene/HTTPS, DNS, SPF/DKIM/DMARC og e-postleverbarhet testes før migrering fra testadressen. Domene, HTTPS, DNS-autentisering, begrenset Resend-nøkkel, faktisk postkasse, toveis postkassetest, passordmail og kontrollert fakturasending med PDF er bekreftet 22.09.2026. Full meldingshodekontroll, leveringsmåling og retur-/bouncehåndtering gjenstår. Se `domain-email-production.md`.
 
 ## Kilder som må holdes oppdatert
 

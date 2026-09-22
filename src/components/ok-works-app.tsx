@@ -2140,6 +2140,7 @@ function InvoiceScreen({
   >;
   const customer = (invoice.customerSnapshot ?? {}) as Record<string, unknown>;
   const finalized = invoice.status !== "DRAFT";
+  const sent = invoice.status === "SENT" || Boolean(invoice.sentAt);
   async function resetDraft() {
     if (busy || !window.confirm("Tilbakestille fakturautkastet til ordre? Utkastet fjernes, men alle timer, linjer, bilder og dokumenter beholdes. Du kan lage et nytt utkast senere.")) return;
     setBusy(true);
@@ -2221,7 +2222,7 @@ function InvoiceScreen({
             ← Tilbake til fakturaer
           </button>
           <p className="eyebrow">
-            {finalized ? "Finalisert faktura" : "Fakturautkast"}
+            {sent ? "Sendt faktura" : finalized ? "Finalisert faktura" : "Fakturautkast"}
           </p>
           <h1>
             {finalized
@@ -2230,7 +2231,9 @@ function InvoiceScreen({
           </h1>
           <p className="subhead">
             {finalized
-              ? "Fakturaen er låst og klar for utsending."
+              ? sent
+                ? `Fakturaen ble sendt ${formatDate(String(invoice.sentAt))} og venter på betaling.`
+                : "Fakturaen er låst og klar for utsending."
               : "Kontroller opplysningene før fakturanummeret låses."}
           </p>
         </div>
