@@ -203,6 +203,13 @@ export function OkWorksApp() {
 
 function PublicHome({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
   const [authMode, setAuthMode] = useState<"email" | "register" | null>(null);
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("login");
+    if (requested === "1") {
+      window.history.replaceState(null, "", window.location.pathname);
+      window.queueMicrotask(() => setAuthMode("email"));
+    }
+  }, []);
   const openAuth = (mode: "email" | "register") => setAuthMode(mode);
   return (
     <main className="public-home">
