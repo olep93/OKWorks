@@ -11,7 +11,7 @@ const input = z.object({
   recipient: z.email(),
   subject: z.string().trim().min(3).max(300),
   message: z.string().trim().min(3).max(5000),
-  deliveryType: z.enum(["INVOICE", "REMINDER"]).default("INVOICE"),
+  deliveryType: z.enum(["INVOICE", "REMINDER", "TEST_DRAFT"]).default("INVOICE"),
 });
 
 export async function POST(
@@ -42,9 +42,14 @@ export async function POST(
         { error: "Fakturaen finnes ikke." },
         { status: 404 },
       );
-    if (invoice.status === "DRAFT")
+    if (invoice.status === "DRAFT" && parsed.data.deliveryType !== "TEST_DRAFT")
       return NextResponse.json(
         { error: "Fakturaen må finaliseres før sending." },
+        { status: 409 },
+      );
+    if (invoice.status !== "DRAFT" && parsed.data.deliveryType === "TEST_DRAFT")
+      return NextResponse.json(
+        { error: "Bare et fakturautkast kan sendes som test." },
         { status: 409 },
       );
     if (["PAID", "VOID", "CREDITED"].includes(invoice.status))
@@ -124,7 +129,7 @@ export async function POST(
         text: parsed.data.message,
         attachments: [
           {
-            filename: `faktura-${invoice.invoiceNumber}.pdf`,
+            filename: parsed.data.deliveryType === "TEST_DRAFT" ? "TEST-fakturautkast-skal-ikke-betales.pdf" : `faktura-${invoice.invoiceNumber}.pdf`,
             content: Buffer.from(pdf).toString("base64"),
           },
         ],
@@ -144,7 +149,8 @@ export async function POST(
         await tx`UPDATE invoices SET status='SENT', sent_at=COALESCE(sent_at, now()), updated_at=now() WHERE id=${id}`;
         await tx`UPDATE orders SET status='INVOICED', updated_at=now() WHERE id=${invoice.sourceOrderId} AND organization_id=${user.organizationId}`;
       }
-      await tx`INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, metadata) VALUES (${user.organizationId}, ${user.id}, ${parsed.data.deliveryType === "REMINDER" ? "INVOICE_REMINDER_SENT" : "INVOICE_SENT"}, 'INVOICE', ${id}, ${JSON.stringify({ recipient: parsed.data.recipient, deliveryId: delivery[0].id })}::jsonb)`;
+      const action = parsed.data.deliveryType === "REMINDER" ? "INVOICE_REMINDER_SENT" : parsed.data.deliveryType === "TEST_DRAFT" ? "INVOICE_TEST_DRAFT_SENT" : "INVOICE_SENT";
+      await tx`INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, metadata) VALUES (${user.organizationId}, ${user.id}, ${action}, 'INVOICE', ${id}, ${JSON.stringify({ recipient: parsed.data.recipient, deliveryId: delivery[0].id })}::jsonb)`;
     });
     return NextResponse.json({ ok: true, sentAt: new Date().toISOString() });
   } catch {
