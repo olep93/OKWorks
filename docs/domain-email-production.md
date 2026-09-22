@@ -11,11 +11,11 @@ Status 22.09.2026:
 
 DNS-poster for Vercel og Domeneshop skal ikke fjernes når Resend endres. Resend bruker egne subdomener og kan leve ved siden av Domeneshops MX/SPF/DKIM.
 
-## Gjenstår før ekte utsending
+## Gjenstår før komplett produksjonsoppsett
 
 1. Opprett `post@okfaktura.no` som faktisk postkasse med et sterkt, unikt passord. Dette krever at eier velger/lagrer passordet.
-2. Opprett en Resend-nøkkel med **Sending access** begrenset til kun `okfaktura.no`; lagre den som hemmelig `RESEND_API_KEY` i Vercel Production. Ikke vis eller logg nøkkelen.
-3. Redeploy og test aktivering, glemt passord og én faktura til en kontrollert mottaker. Bekreft svaradresse og leverbarhet.
+2. Ferdig 22.09.2026: Resend-nøkkel med **Sending access** begrenset til `okfaktura.no` er lagret som hemmelig `RESEND_API_KEY` i Vercel Production.
+3. Delvis ferdig 22.09.2026: glemt-passord-meldingen ble levert til kontrollert Gmail-mottaker. Test fortsatt nyregistrering/aktivering og én faktura med PDF-vedlegg. Bekreft også svaradresse.
 4. Kontroller SPF, begge DKIM-signaturer og DMARC i de mottatte meldingshodene. Stram DMARC gradvis etter stabil test; ikke gå rett til `reject`.
 5. Lag en rutine for nøkkelrotasjon og tilbakekalling. Unngå en konto-vid fulltilgangsnøkkel for denne appen.
 
