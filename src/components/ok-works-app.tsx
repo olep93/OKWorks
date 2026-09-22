@@ -2133,7 +2133,7 @@ function InvoiceScreen({
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [sendMode, setSendMode] = useState<"INVOICE" | "REMINDER" | null>(null);
+  const [sendMode, setSendMode] = useState<"INVOICE" | "REMINDER" | "TEST_DRAFT" | null>(null);
   const [deliveries, setDeliveries] = useState<Array<{ id: string; recipient: string; subject: string; delivery_type: string; status: string; error_message: string | null; sent_at: string | null; created_at: string }>>([]);
   async function load() {
     const [invoiceResponse, checkResponse, deliveryResponse] = await Promise.all([
@@ -2273,6 +2273,7 @@ function InvoiceScreen({
         </div>
         <div className="invoice-actions">
           {!finalized && <button className="secondary" disabled={busy} onClick={resetDraft}>{busy ? "Arbeider…" : "Tilbakestill til ordre"}</button>}
+          {!finalized && <button className="secondary" disabled={busy} onClick={() => setSendMode(sendMode === "TEST_DRAFT" ? null : "TEST_DRAFT")}><Send /> Send testutkast</button>}
           <a className="secondary" href={`/api/invoices/${invoiceId}/pdf`}>
             <Download />
             Last ned PDF
@@ -2484,7 +2485,7 @@ function InvoiceScreen({
                   <b>Utsendingshistorikk</b>
                   {deliveries.length ? deliveries.map((delivery) => (
                     <div key={delivery.id} className={`delivery-row delivery-${delivery.status.toLowerCase()}`}>
-                      <span>{delivery.delivery_type === "REMINDER" ? "Påminnelse" : "Faktura"} · {{ SENT: "Sendt", DELIVERED: "Levert", DELAYED: "Forsinket", BOUNCED: "Avvist", COMPLAINED: "Spamrapport", FAILED: "Feilet", SUPPRESSED: "Blokkert", PENDING: "Venter" }[delivery.status] ?? delivery.status}</span>
+                      <span>{delivery.delivery_type === "REMINDER" ? "Påminnelse" : delivery.delivery_type === "TEST_DRAFT" ? "Testutkast" : "Faktura"} · {{ SENT: "Sendt", DELIVERED: "Levert", DELAYED: "Forsinket", BOUNCED: "Avvist", COMPLAINED: "Spamrapport", FAILED: "Feilet", SUPPRESSED: "Blokkert", PENDING: "Venter" }[delivery.status] ?? delivery.status}</span>
                       <strong>{delivery.recipient}</strong>
                       <small>{formatDate(delivery.sent_at || delivery.created_at)} · {delivery.subject}</small>
                       {delivery.error_message && <small className="form-error">{delivery.error_message}</small>}
@@ -2494,6 +2495,26 @@ function InvoiceScreen({
               </>
             ) : (
               <>
+                {sendMode === "TEST_DRAFT" && (
+                  <form className="send-form" onSubmit={sendInvoice}>
+                    <input type="hidden" name="deliveryType" value="TEST_DRAFT" />
+                    <div className="secure-note">
+                      <Send />
+                      <div><b>Send testutkast</b><span>Ingen fakturanummer tildeles, og meldingen er ikke et betalingskrav.</span></div>
+                    </div>
+                    <Field label="Mottaker">
+                      <input name="recipient" type="email" defaultValue={String(customer.email ?? "")} required />
+                    </Field>
+                    <Field label="Emne">
+                      <input name="subject" defaultValue={`TEST – fakturautkast fra ${String(company.name ?? "firma")}`} required />
+                    </Field>
+                    <Field label="Melding">
+                      <textarea name="message" rows={6} defaultValue={`Hei,\n\nDette er et testutkast fra ${String(company.name ?? "firmaet")} for kontroll av faktura og dokumentasjonsvedlegg. Dette er ikke et betalingskrav og skal ikke betales.\n\nMed vennlig hilsen\n${String(company.name ?? "")}`} required />
+                    </Field>
+                    {error && <p className="form-error">{error}</p>}
+                    <button className="primary full" disabled={busy}>{busy ? "Sender…" : "Send testutkast med vedlegg"}</button>
+                  </form>
+                )}
                 <div className="check-summary">
                   <b>
                     {preflight?.canFinalize
