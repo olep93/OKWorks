@@ -318,6 +318,14 @@ function Login({ onAuthenticated, initialStep = "email", embedded = false }: { o
     setBusy(true);
     setError("");
     const form = new FormData(event.currentTarget);
+    if (
+      step === "register" &&
+      form.get("password") !== form.get("confirmPassword")
+    ) {
+      setError("Passordene er ikke like.");
+      setBusy(false);
+      return;
+    }
     const endpoint =
       step === "email"
         ? "/api/auth/status"
@@ -342,6 +350,7 @@ function Login({ onAuthenticated, initialStep = "email", embedded = false }: { o
                 companyName: form.get("companyName"),
                 organizationNumber: form.get("organizationNumber"),
                 password: form.get("password"),
+                confirmPassword: form.get("confirmPassword"),
                 acceptedTerms: form.get("acceptedTerms") === "on",
               }
             : { email, password: form.get("password") };
@@ -458,6 +467,18 @@ function Login({ onAuthenticated, initialStep = "email", embedded = false }: { o
                     : "current-password"
                 }
                 minLength={step === "setup" || step === "register" ? 10 : 1}
+                required
+              />
+            </label>
+          )}
+          {step === "register" && (
+            <label>
+              <span>Gjenta passord</span>
+              <input
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                minLength={10}
                 required
               />
             </label>

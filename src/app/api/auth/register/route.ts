@@ -10,7 +10,11 @@ const inputSchema = z.object({
   companyName: z.string().trim().min(2, "Skriv inn firmanavnet.").max(200),
   organizationNumber: z.string().trim().max(20).optional(),
   password: z.string().min(10, "Passordet må ha minst 10 tegn.").max(200),
+  confirmPassword: z.string().min(1, "Gjenta passordet."),
   acceptedTerms: z.literal(true, { error: "Du må bekrefte vilkårene." }),
+}).refine((value) => value.password === value.confirmPassword, {
+  message: "Passordene er ikke like.",
+  path: ["confirmPassword"],
 });
 
 export async function POST(request: Request) {
