@@ -1,5 +1,5 @@
 "use client";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 
 export function EmailVerification() {
@@ -7,6 +7,13 @@ export function EmailVerification() {
   const [complete, setComplete] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [redirectSeconds, setRedirectSeconds] = useState(4);
+  useEffect(() => {
+    if (!complete) return;
+    const redirect = window.setTimeout(() => window.location.replace("/?login=1"), 4000);
+    const countdown = window.setInterval(() => setRedirectSeconds((value) => Math.max(0, value - 1)), 1000);
+    return () => { window.clearTimeout(redirect); window.clearInterval(countdown); };
+  }, [complete]);
   async function submit(event: FormEvent<HTMLFormElement>, confirm: boolean) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -27,7 +34,8 @@ export function EmailVerification() {
   }
   return (
     <main className="auth-page"><section className="auth-card">
-      <h1>Bekreft e-postadressen</h1>
+      <div className="auth-brand"><div className="brand-mark">OK</div><div><h1>OKFaktura</h1><p>Trygg kontoaktivering</p></div></div>
+      <div className="auth-copy"><p className="eyebrow">Kontoaktivering</p><h2>{complete ? "E-postadressen er bekreftet" : "Bekreft e-postadressen"}</h2>{complete && <p>Du sendes til innlogging om {redirectSeconds} sekunder.</p>}</div>
       {!complete && <>
         <p>Åpnet du lenken fra e-posten? Trykk nedenfor for å bekrefte. Lenken er gyldig i 24 timer.</p>
         <form onSubmit={(event) => submit(event, true)}><button className="primary full" disabled={busy}>Bekreft e-postadressen</button></form>
@@ -37,9 +45,9 @@ export function EmailVerification() {
           <button className="secondary full" disabled={busy}>{busy ? "Et øyeblikk…" : "Send ny bekreftelseslenke"}</button>
         </form>
       </>}
-      {message && <p role="status">{message}</p>}
+      {message && <p className="auth-success" role="status">{message}</p>}
       {error && <p role="alert" className="form-error">{error}</p>}
-      <Link href="/">Til innlogging</Link>
+      <Link className={complete ? "primary full auth-return" : "auth-back-link"} href={complete ? "/?login=1" : "/"}>{complete ? "Gå til innlogging nå" : "Tilbake til forsiden"}</Link>
     </section></main>
   );
 }
