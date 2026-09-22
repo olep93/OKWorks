@@ -1963,16 +1963,30 @@ function InvoicesScreen({ onOpen }: { onOpen: (id: string) => void }) {
     }>
   >([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [total, setTotal] = useState(0);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("ALL");
   useEffect(() => {
-    fetch("/api/invoices", { cache: "no-store" })
+    fetch("/api/invoices?limit=50&offset=0", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         setRows(data.invoices ?? []);
+        setTotal(Number(data.total ?? data.invoices?.length ?? 0));
         setLoading(false);
       });
   }, []);
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const response = await fetch(`/api/invoices?limit=50&offset=${rows.length}`, { cache: "no-store" });
+      const data = await response.json();
+      setRows((current) => [...current, ...(data.invoices ?? [])]);
+      setTotal(Number(data.total ?? total));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
   const label = (invoice: (typeof rows)[number]) => invoiceArchiveLabel(invoice);
   const visible = rows.filter((invoice) => {
     const status = label(invoice);
@@ -2045,6 +2059,11 @@ function InvoicesScreen({ onOpen }: { onOpen: (id: string) => void }) {
               <ChevronRight />
             </button>
           ))}
+          {rows.length < total && (
+            <button className="archive-load-more" onClick={loadMore} disabled={loadingMore}>
+              <span>{loadingMore ? "Laster flere…" : `Vis flere fakturaer (${rows.length} av ${total})`}</span>
+            </button>
+          )}
         </section>
       ) : rows.length ? (
         <section className="panel empty-state">
