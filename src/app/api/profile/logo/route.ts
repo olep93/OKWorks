@@ -38,3 +38,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Kunne ikke lagre firmalogoen." }, { status: error instanceof Error && error.message === "UNAUTHORIZED" ? 401 : 500 });
   }
 }
+
+export async function DELETE() {
+  try {
+    const user = await requireUser();
+    await db.transaction(async (tx) => {
+      const [organization] = await tx.update(organizations).set({ logoStorageKey: null, updatedAt: new Date() }).where(eq(organizations.id, user.organizationId)).returning({ id: organizations.id });
+      if (!organization) throw new Error("LOGO_ORGANIZATION_NOT_FOUND");
+      const drafts = await tx.select({ id: invoices.id, snapshot: invoices.organizationSnapshot }).from(invoices).where(and(eq(invoices.organizationId, user.organizationId), eq(invoices.status, "DRAFT"))).for("update");
+      for (const draft of drafts) {
+        const snapshot = draft.snapshot && typeof draft.snapshot === "object" ? draft.snapshot : {};
+        await tx.update(invoices).set({ organizationSnapshot: { ...snapshot, logoStorageKey: null }, updatedAt: new Date() }).where(and(eq(invoices.id, draft.id), eq(invoices.organizationId, user.organizationId), eq(invoices.status, "DRAFT")));
+      }
+    });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const status = error instanceof Error && error.message === "UNAUTHORIZED" ? 401 : 500;
+    return NextResponse.json({ error: "Kunne ikke fjerne firmalogoen." }, { status });
+  }
+}

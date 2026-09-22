@@ -2846,6 +2846,22 @@ function SettingsScreen({
       setLogoBusy(false);
     }
   }
+  async function removeLogo() {
+    if (!profile?.organization?.logoStorageKey || logoBusy) return;
+    setLogoError("");
+    setLogoBusy(true);
+    try {
+      const response = await fetch("/api/profile/logo", { method: "DELETE" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Kunne ikke fjerne logoen.");
+      await load();
+      onSaved("Firmalogo fjernet. OKFakturas standardmerke brukes på fakturautkast og nye fakturaer.");
+    } catch (error) {
+      setLogoError(error instanceof Error ? error.message : "Kunne ikke fjerne logoen.");
+    } finally {
+      setLogoBusy(false);
+    }
+  }
   const [error, setError] = useState("");
   async function load() {
     const response = await fetch("/api/profile", { cache: "no-store" });
@@ -3017,6 +3033,7 @@ function SettingsScreen({
             <div className="logo-upload">
               <label htmlFor="company-logo">{logoBusy ? "Laster opp…" : org.logoStorageKey ? "Bytt logo" : "Last opp logo"}</label>
               <input id="company-logo" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" onChange={uploadLogo} disabled={logoBusy} />
+              {org.logoStorageKey && <button type="button" className="secondary" onClick={removeLogo} disabled={logoBusy}>{logoBusy ? "Arbeider…" : "Fjern logo"}</button>}
               {logoError && <p className="form-error" role="alert">{logoError}</p>}
             </div>
           </div>

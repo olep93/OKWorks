@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="240" viewBox="0 0 960 240" role="img" aria-labelledby="title desc">
+  <title id="title">OKFaktura</title>
+  <desc id="desc">OKFaktura-logo med limefarget OK-symbol og mørkegrønn tekst</desc>
+  <rect width="960" height="240" rx="36" fill="#ffffff"/>
+  <rect x="28" y="28" width="184" height="184" rx="48" fill="#d7f36a"/>
+  <text x="120" y="147" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="78" font-weight="800" fill="#173f32">OK</text>
+  <text x="250" y="151" font-family="Arial, Helvetica, sans-serif" font-size="92" font-weight="750" letter-spacing="-3" fill="#173f32">OKFaktura</text>
+</svg>
