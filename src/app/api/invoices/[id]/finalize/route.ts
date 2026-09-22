@@ -30,7 +30,7 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
       await tx`UPDATE time_entries t SET billing_status = 'INVOICED', invoice_line_id = l.id, updated_at = now() FROM invoice_lines l WHERE l.invoice_id = ${id} AND l.source_type = 'TIME' AND l.source_id = t.id`;
       await tx`UPDATE order_entries e SET billing_status = 'INVOICED', updated_at = now() FROM invoice_lines l WHERE l.invoice_id = ${id} AND l.source_id = e.id`;
       await tx`UPDATE orders SET status = 'INVOICED', updated_at = now() WHERE id = ${invoice.source_order_id} AND organization_id = ${user.organizationId}`;
-      await tx`INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, metadata) VALUES (${user.organizationId}, ${user.id}, 'INVOICE_FINALIZED', 'INVOICE', ${id}, ${tx.json({ invoiceNumber })})`;
+      await tx`INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, metadata) VALUES (${user.organizationId}, ${user.id}, 'INVOICE_FINALIZED', 'INVOICE', ${id}, ${JSON.stringify({ invoiceNumber })}::jsonb)`;
       return { status: 200, body: { invoice: finalizedRows[0], preflight } };
     });
     return NextResponse.json(result.body, { status: result.status });
