@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { invoiceArchiveLabel, invoiceArchiveTone } from "./invoice-status";
+import { invoiceArchiveLabel, invoiceArchiveTone, invoiceDetailState } from "./invoice-status";
 
 const now = new Date("2026-09-22T12:00:00Z");
 
@@ -33,5 +33,27 @@ describe("invoice archive status", () => {
     expect(invoiceArchiveLabel({ status: "FINALIZED", dueDate: "2026-01-01" }, now)).toBe("Finalisert – ikke sendt");
     expect(invoiceArchiveLabel({ status: "VOID", dueDate: "2026-01-01" }, now)).toBe("Annullert");
     expect(invoiceArchiveLabel({ status: "CREDITED", dueDate: "2026-01-01" }, now)).toBe("Kreditert");
+  });
+});
+
+describe("invoice detail presentation", () => {
+  it.each(["PAID", "CREDITED", "VOID", "DRAFT", "UNKNOWN"])("does not offer payment or reminders for %s", (status) => {
+    const state = invoiceDetailState({ status, sentAt: "2026-09-22" });
+    expect(state.canRecordPayment).toBe(false);
+    expect(state.canSend).toBe(false);
+    expect(state.canRemind).toBe(false);
+    expect(state.description).not.toContain("venter på betaling");
+  });
+  it("shows a paid invoice as paid even when it has an earlier sent date", () => {
+    expect(invoiceDetailState({ status: "PAID", sentAt: "2026-09-22" }).title).toBe("Betalt faktura");
+  });
+  it("makes partial payment explicit and keeps follow-up actions available", () => {
+    expect(invoiceDetailState({ status: "PARTIALLY_PAID", sentAt: "2026-09-22" })).toMatchObject({ title: "Delbetalt faktura", canRecordPayment: true, canRemind: true });
+  });
+  it("does not offer reminders for an unsent finalized invoice", () => {
+    expect(invoiceDetailState({ status: "FINALIZED" })).toMatchObject({ title: "Finalisert faktura", canRecordPayment: true, canSend: true, canRemind: false });
+  });
+  it("allows reminders for sent invoices", () => {
+    expect(invoiceDetailState({ status: "SENT" })).toMatchObject({ title: "Sendt faktura", canSend: true, canRemind: true });
   });
 });

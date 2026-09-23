@@ -36,7 +36,7 @@ import Image from "next/image";
 import { formatBankAccount } from "@/lib/bank-account-format";
 import { formatMoney, formatQuantity, formatDate, localDate } from "@/lib/format";
 import { summarizeInvoiceLines } from "@/lib/invoice-summary";
-import { invoiceArchiveLabel, invoiceArchiveTone } from "@/lib/invoice-status";
+import { invoiceArchiveLabel, invoiceArchiveTone, invoiceDetailState } from "@/lib/invoice-status";
 import { InvoicePayments } from "@/components/invoice-payments";
 
 type User = {
@@ -2190,6 +2190,7 @@ function InvoiceScreen({
   const customer = (invoice.customerSnapshot ?? {}) as Record<string, unknown>;
   const finalized = invoice.status !== "DRAFT";
   const sent = invoice.status === "SENT" || Boolean(invoice.sentAt);
+  const detailState = invoiceDetailState({ status: String(invoice.status), sentAt: invoice.sentAt ? String(invoice.sentAt) : null });
   async function resetDraft() {
     if (busy || !window.confirm("Tilbakestille fakturautkastet til ordre? Utkastet fjernes, men alle timer, linjer, bilder og dokumenter beholdes. Du kan lage et nytt utkast senere.")) return;
     setBusy(true);
@@ -2258,7 +2259,7 @@ function InvoiceScreen({
             ← Tilbake til fakturaer
           </button>
           <p className="eyebrow">
-            {sent ? "Sendt faktura" : finalized ? "Finalisert faktura" : "Fakturautkast"}
+            {detailState.title}
           </p>
           <h1>
             {finalized
@@ -2266,11 +2267,7 @@ function InvoiceScreen({
               : "Kontroller fakturagrunnlaget"}
           </h1>
           <p className="subhead">
-            {finalized
-              ? sent
-                ? `Fakturaen ble sendt ${formatDate(String(invoice.sentAt))} og venter på betaling.`
-                : "Fakturaen er låst og klar for utsending."
-              : "Kontroller opplysningene før fakturanummeret låses."}
+            {detailState.description}
           </p>
         </div>
         <div className="invoice-actions">
@@ -2280,10 +2277,7 @@ function InvoiceScreen({
             <Download />
             Last ned PDF
           </a>
-          {finalized &&
-            invoice.status !== "PAID" &&
-            invoice.status !== "CREDITED" &&
-            invoice.status !== "VOID" && (
+          {detailState.canSend && (
               <button
                 className="secondary"
                 onClick={() => setSendMode(sendMode === "INVOICE" ? null : "INVOICE")}
@@ -2293,10 +2287,7 @@ function InvoiceScreen({
                 {sent ? "Send faktura på nytt" : "Send faktura"}
               </button>
             )}
-          {sent &&
-            invoice.status !== "PAID" &&
-            invoice.status !== "VOID" &&
-            invoice.status !== "CREDITED" && (
+          {detailState.canRemind && (
               <button
                 className="secondary"
                 onClick={() => setSendMode(sendMode === "REMINDER" ? null : "REMINDER")}
@@ -2306,9 +2297,7 @@ function InvoiceScreen({
                 Send betalingspåminnelse
               </button>
             )}
-          {finalized &&
-            invoice.status !== "PAID" &&
-            invoice.status !== "VOID" && (
+          {detailState.canRecordPayment && (
               <button
                 className="primary"
                 onClick={() => setPaymentOpen(true)}

@@ -2,6 +2,12 @@
 
 Status 17.09.2026: krav og innledende kodegjennomgang, ikke godkjent for 10 000 brukere eller ekte abonnementsbetaling.
 
+## Betalingsstatus i fakturavisning 23.09.2026
+
+- Rettet at tidligere sendte, nå betalte fakturaer fortsatt kunne vise «venter på betaling». Egen statusoverskrift og forklaring for betalt, delbetalt, kreditert og annullert.
+- Felles testbar statusfunksjon styrer knappene for sending, påminnelse og manuell betaling. Krediterte fakturaer viser ikke lenger «Registrer betaling». Ukjente statuser får ingen slike handlinger.
+- Ni nye regresjonstester med syntetiske statuser; totalt 140 tester, typekontroll, lint og produksjonsbygg passerte. Ingen faktura eller betaling i produksjon endres for å teste visningen.
+
 ## Tilgangstester 23.09.2026
 
 - 15 nye regresjonstester for fakturadetaljer, PDF og opplastede vedlegg: innlogging kreves før databaseoppslag, firmafilter på faktura/linjer/vedlegg og både filens og foreldreordrens firma kontrolleres. Inaccessible poster gir 404; innhold genereres ikke ved avvist tilgang.
