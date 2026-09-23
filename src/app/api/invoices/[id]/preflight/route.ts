@@ -17,7 +17,8 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       db.select({ count: sql<number>`count(*)::int` }).from(orderEntries).where(and(eq(orderEntries.orderId, invoice.sourceOrderId), eq(orderEntries.organizationId, user.organizationId), eq(orderEntries.kind, "DRIVING"), sql`${orderEntries.metadata}->>'tollKnown' = 'false'`)),
     ]);
     return NextResponse.json(checkInvoicePreflight({ status: invoice.status, totalOre: invoice.totalOre, organization: invoice.organizationSnapshot as Record<string, unknown>, customer: invoice.customerSnapshot as Record<string, unknown>, lineCount: lineResult?.count ?? 0, documentationCount: documentResult?.count ?? 0, unresolvedTollCount: tollResult?.count ?? 0 }));
-  } catch {
-    return NextResponse.json({ error: "Ikke innlogget." }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") return NextResponse.json({ error: "Økten er utløpt. Logg inn igjen." }, { status: 401 });
+    return NextResponse.json({ error: "Kunne ikke kontrollere fakturaen. Prøv igjen." }, { status: 500 });
   }
 }

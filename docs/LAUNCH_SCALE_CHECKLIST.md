@@ -2,6 +2,12 @@
 
 Status 17.09.2026: krav og innledende kodegjennomgang, ikke godkjent for 10 000 brukere eller ekte abonnementsbetaling.
 
+## Ferdigstillingskontroll 23.09.2026
+
+- Backendfeil ved kontroll av fakturautkast gir nå en korrekt feilmelding med mulighet til å prøve igjen, ikke feilaktig «Ikke innlogget». Utløpt sesjon gir fortsatt 401.
+- Fire nye rutetester dekker innlogging, utilgjengelig faktura, databasefeil og firmafiltre på alle grunnlagsoppslag. SQL-filtre testes med mock; dette erstatter ikke test mot to firmaer i PostgreSQL.
+- Totalt 180 tester, typekontroll, lint og produksjonsbygg passerte. Ingen kundedata endret.
+
 ## Tilbakestilling av fakturautkast 23.09.2026
 
 - 15 nye rutetester dekker innlogging, firmafiltre på både faktura og ordre, låserekkefølge, blokkering av nummererte/finaliserte/sendte/betalte fakturaer og låste ordre. Kun et tillatt utkast slettes av den testede ruten; kilderegistreringer oppdateres ikke.
