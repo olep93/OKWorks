@@ -26,15 +26,16 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
       const invoiceNumber = Number(sequenceRows[0].next_number);
       const kid = createKid(invoiceNumber);
       await tx`UPDATE invoice_sequences SET next_number = ${invoiceNumber + 1}, updated_at = now() WHERE organization_id = ${user.organizationId}`;
-      const finalizedRows = await tx`UPDATE invoices SET invoice_number = ${invoiceNumber}, kid = ${kid}, status = 'FINALIZED', finalized_at = now(), remaining_amount_ore = total_ore, updated_at = now() WHERE id = ${id} RETURNING *`;
-      await tx`UPDATE time_entries t SET billing_status = 'INVOICED', invoice_line_id = l.id, updated_at = now() FROM invoice_lines l WHERE l.invoice_id = ${id} AND l.source_type = 'TIME' AND l.source_id = t.id`;
-      await tx`UPDATE order_entries e SET billing_status = 'INVOICED', updated_at = now() FROM invoice_lines l WHERE l.invoice_id = ${id} AND l.source_id = e.id`;
+      const finalizedRows = await tx`UPDATE invoices SET invoice_number = ${invoiceNumber}, kid = ${kid}, status = 'FINALIZED', finalized_at = now(), remaining_amount_ore = total_ore, updated_at = now() WHERE id = ${id} AND organization_id = ${user.organizationId} RETURNING *`;
+      await tx`UPDATE time_entries t SET billing_status = 'INVOICED', invoice_line_id = l.id, updated_at = now() FROM invoice_lines l WHERE l.invoice_id = ${id} AND l.organization_id = ${user.organizationId} AND t.organization_id = ${user.organizationId} AND t.order_id = ${invoice.source_order_id} AND l.source_type = 'TIME' AND l.source_id = t.id`;
+      await tx`UPDATE order_entries e SET billing_status = 'INVOICED', updated_at = now() FROM invoice_lines l WHERE l.invoice_id = ${id} AND l.organization_id = ${user.organizationId} AND e.organization_id = ${user.organizationId} AND e.order_id = ${invoice.source_order_id} AND l.source_type <> 'TIME' AND l.source_id = e.id`;
       await tx`UPDATE orders SET status = 'INVOICED', updated_at = now() WHERE id = ${invoice.source_order_id} AND organization_id = ${user.organizationId}`;
       await tx`INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, metadata) VALUES (${user.organizationId}, ${user.id}, 'INVOICE_FINALIZED', 'INVOICE', ${id}, ${JSON.stringify({ invoiceNumber })}::jsonb)`;
       return { status: 200, body: { invoice: finalizedRows[0], preflight } };
     });
     return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
-    console.error(error); return NextResponse.json({ error: "Kunne ikke finalisere fakturaen." }, { status: 500 });
+    if (error instanceof Error && error.message === "UNAUTHORIZED") return NextResponse.json({ error: "Økten er utløpt. Logg inn igjen." }, { status: 401 });
+    return NextResponse.json({ error: "Kunne ikke finalisere fakturaen." }, { status: 500 });
   }
 }

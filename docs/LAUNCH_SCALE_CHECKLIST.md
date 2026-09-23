@@ -2,6 +2,13 @@
 
 Status 17.09.2026: krav og innledende kodegjennomgang, ikke godkjent for 10 000 brukere eller ekte abonnementsbetaling.
 
+## Fakturafinalisering 23.09.2026
+
+- Eksplisitt firmafilter på fakturaoppdatering og firma-/ordrefilter på underliggende timer og ordrelinjer. Kildetype skiller timer fra øvrige ordrelinjer.
+- Ti regresjonstester dekker innlogging, utilgjengelig faktura, gjentatt finalisering uten nytt nummer, manglende selgeropplysninger, tom faktura, uavklarte bompenger og avgrensede kildeoppdateringer.
+- 161 tester, typekontroll, lint og produksjonsbygg passerte. Ingen ekte faktura ble finalisert eller fakturanummer brukt under testene.
+- Testene bruker mock av SQL. Reell PostgreSQL-samtidighet og transaksjonsrollback må fortsatt prøves i separat testdatabase.
+
 ## Innloggingsvern 23.09.2026
 
 - Maksimalt 20 gyldig formaterte innloggingsforsøk per normalisert e-postadresse i et fast 15-minuttersvindu. Teller ligger i eksisterende auth_mail_limits med separat login-prefiks og hash av adressen, ikke prosessminne. Også vellykkede forsøk teller; eksisterende sesjoner og passord endres ikke.
