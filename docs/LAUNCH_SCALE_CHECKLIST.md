@@ -2,6 +2,14 @@
 
 Status 17.09.2026: krav og innledende kodegjennomgang, ikke godkjent for 10 000 brukere eller ekte abonnementsbetaling.
 
+## Tilgangstester 23.09.2026
+
+- 15 nye regresjonstester for fakturadetaljer, PDF og opplastede vedlegg: innlogging kreves før databaseoppslag, firmafilter på faktura/linjer/vedlegg og både filens og foreldreordrens firma kontrolleres. Inaccessible poster gir 404; innhold genereres ikke ved avvist tilgang.
+- Vedlegg tillater ikke HTML, SVG eller JavaScript i forhåndsvisning. PDF og vedlegg testes for private/no-store og nosniff.
+- PDF-ruten gir nå 401 ved utløpt innlogging, og fakturadetaljer gir 500 ved backendfeil fremfor feilaktig 401.
+- 131 tester, typekontroll, lint og produksjonsbygg passerte 23.09.2026. Testene inspiserer genererte SQL-filtre med mock av databasen; de erstatter ikke ende-til-ende-test med to firmaer mot PostgreSQL.
+- Betalingspakken fra commit 3789e0e ble publisert og kontrollert: Vercel bekreftet migrering 0015, og skjema/historikk ble kontrollert i produksjon uten å registrere betaling. Se PAYMENT_STABILIZATION.md.
+
 ## Stabilisering 22.09.2026 (kveld)
 
 - Utsendingshistorikk vises også på testutkast, med mottaker, emne, tidspunkt og leverandørstatus. Vellykket sending gir en synlig bekreftelse; «sendt» skilles eksplisitt fra «levert».

@@ -19,8 +19,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     const attachments = attachmentRows.filter((row): row is typeof row & { fileData: Uint8Array } => Boolean(row.fileData));
     const bytes = await buildInvoicePdf(invoice, lines, attachments, attachmentRows);
     const filename = invoice.invoiceNumber ? `faktura-${invoice.invoiceNumber}.pdf` : "fakturautkast.pdf";
-    return new NextResponse(Buffer.from(bytes), { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="${filename}"`, "cache-control": "private, no-store" } });
+    return new NextResponse(Buffer.from(bytes), { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="${filename}"`, "cache-control": "private, no-store", "x-content-type-options": "nosniff" } });
   } catch (error) {
-    console.error(error); return NextResponse.json({ error: "Kunne ikke lage PDF-en." }, { status: 500 });
+    if (error instanceof Error && error.message === "UNAUTHORIZED") return NextResponse.json({ error: "Økten er utløpt. Logg inn igjen." }, { status: 401 });
+    return NextResponse.json({ error: "Kunne ikke lage PDF-en." }, { status: 500 });
   }
 }
