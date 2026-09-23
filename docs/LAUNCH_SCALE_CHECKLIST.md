@@ -2,6 +2,13 @@
 
 Status 17.09.2026: krav og innledende kodegjennomgang, ikke godkjent for 10 000 brukere eller ekte abonnementsbetaling.
 
+## Innloggingsvern 23.09.2026
+
+- Maksimalt 20 gyldig formaterte innloggingsforsøk per normalisert e-postadresse i et fast 15-minuttersvindu. Teller ligger i eksisterende auth_mail_limits med separat login-prefiks og hash av adressen, ikke prosessminne. Også vellykkede forsøk teller; eksisterende sesjoner og passord endres ikke.
+- Atomisk UPSERT før brukeroppslag og passordverifisering; sperrede forsøk får 429 og Retry-After. Databasefeil gir 503, ikke en omgåelse av vernet. Ugyldig JSON og overlangt passord avvises tidlig.
+- 11 nye tester; totalt 151 tester, typekontroll, lint og produksjonsbygg passerte. Ingen ekte brukerkonto ble brukt til å utløse sperren.
+- Begrensning: dette er per-adresse-vern, ikke komplett bot-/DDoS-beskyttelse. Distribuerte forsøk mot mange adresser og opprydding av gamle tellerrader må vurderes sammen med trafikkvern før stor offentlig lansering. SQL-atferd er testet med mock, ikke en belastningstest av PostgreSQL.
+
 ## Betalingsstatus i fakturavisning 23.09.2026
 
 - Rettet at tidligere sendte, nå betalte fakturaer fortsatt kunne vise «venter på betaling». Egen statusoverskrift og forklaring for betalt, delbetalt, kreditert og annullert.
