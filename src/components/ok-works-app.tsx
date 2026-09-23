@@ -37,6 +37,7 @@ import { formatBankAccount } from "@/lib/bank-account-format";
 import { formatMoney, formatQuantity, formatDate, localDate } from "@/lib/format";
 import { summarizeInvoiceLines } from "@/lib/invoice-summary";
 import { invoiceArchiveLabel, invoiceArchiveTone } from "@/lib/invoice-status";
+import { InvoicePayments } from "@/components/invoice-payments";
 
 type User = {
   id: string;
@@ -2136,6 +2137,7 @@ function InvoiceScreen({
   const [error, setError] = useState("");
   const [sendMode, setSendMode] = useState<"INVOICE" | "REMINDER" | "TEST_DRAFT" | null>(null);
   const [sendNotice, setSendNotice] = useState("");
+  const [paymentOpen, setPaymentOpen] = useState(false);
   const [deliveries, setDeliveries] = useState<Array<{ id: string; recipient: string; subject: string; delivery_type: string; status: string; error_message: string | null; sent_at: string | null; created_at: string }>>([]);
   async function load() {
     const [invoiceResponse, checkResponse, deliveryResponse] = await Promise.all([
@@ -2218,34 +2220,6 @@ function InvoiceScreen({
       setError(error instanceof Error ? error.message : "Kunne ikke bekrefte finalisering. Last siden på nytt for å kontrollere status.");
     } finally { setBusy(false); }
   }
-  async function registerPayment() {
-    if (busy) return;
-    const remaining = Number(invoice.remainingAmountOre ?? invoice.totalOre);
-    const entered = window.prompt(
-      "Innbetalt beløp i kroner",
-      String(remaining / 100),
-    );
-    if (!entered) return;
-    const amountOre = Math.round(Number(entered.replace(/\s/g, "").replace(",", ".")) * 100);
-    if (!Number.isSafeInteger(amountOre) || amountOre <= 0) {
-      setError("Skriv et gyldig positivt beløp, for eksempel 1 250,50.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      const response = await fetch(`/api/invoices/${invoiceId}/payments`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ amountOre, paidAt: new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Oslo" }).format(new Date()) }),
-      });
-      const value = await response.json();
-      if (!response.ok) throw new Error(value.error ?? "Kunne ikke registrere betalingen.");
-      await load();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Kunne ikke bekrefte betalingen. Last siden på nytt og kontroller restbeløpet før du prøver igjen.");
-    } finally { setBusy(false); }
-  }
   async function sendInvoice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
@@ -2308,6 +2282,7 @@ function InvoiceScreen({
           </a>
           {finalized &&
             invoice.status !== "PAID" &&
+            invoice.status !== "CREDITED" &&
             invoice.status !== "VOID" && (
               <button
                 className="secondary"
@@ -2336,7 +2311,7 @@ function InvoiceScreen({
             invoice.status !== "VOID" && (
               <button
                 className="primary"
-                onClick={registerPayment}
+                onClick={() => setPaymentOpen(true)}
                 disabled={busy}
               >
                 <CheckCircle2 />
@@ -2584,6 +2559,15 @@ function InvoiceScreen({
                 </button>
               </>
             )}
+            {finalized && <InvoicePayments
+              invoiceId={invoiceId}
+              totalOre={Number(invoice.totalOre)}
+              paidOre={Number(invoice.paidAmountOre ?? 0)}
+              remainingOre={Number(invoice.remainingAmountOre ?? invoice.totalOre)}
+              open={paymentOpen}
+              onClose={() => setPaymentOpen(false)}
+              onChanged={load}
+            />}
             <div className="delivery-history">
               <b>Utsendingshistorikk</b>
               <small>«Sendt» betyr akseptert av e-postleverandøren. «Levert» krever leveringsbekreftelse.</small>
