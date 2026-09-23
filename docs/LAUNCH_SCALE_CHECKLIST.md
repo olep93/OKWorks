@@ -2,6 +2,12 @@
 
 Status 17.09.2026: krav og innledende kodegjennomgang, ikke godkjent for 10 000 brukere eller ekte abonnementsbetaling.
 
+## Sesjonstester 23.09.2026
+
+- Åtte nye tester dekker manglende sesjon, SQL-predikater for utløp/aktivt medlemskap/e-postbekreftelse, firmakontekst, hash-lagring, sikre produksjonscookies, lagringsfeil og avgrenset utlogging.
+- Totalt 188 tester, typekontroll, lint og produksjonsbygg passerte. Kun tester og dokumentasjon er endret; ingen ekte sesjoner er opprettet eller tilbakekalt.
+- Cookie-lager og database er mocket. Testene verifiserer genererte filtre og funksjonskall, ikke nettleseratferd eller full tilgangsisolasjon i PostgreSQL.
+
 ## Ferdigstillingskontroll 23.09.2026
 
 - Backendfeil ved kontroll av fakturautkast gir nå en korrekt feilmelding med mulighet til å prøve igjen, ikke feilaktig «Ikke innlogget». Utløpt sesjon gir fortsatt 401.
