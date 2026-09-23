@@ -2,6 +2,11 @@
 
 Status 17.09.2026: krav og innledende kodegjennomgang, ikke godkjent for 10 000 brukere eller ekte abonnementsbetaling.
 
+## Valutavern ved banksynk 23.09.2026
+
+- Manglende valuta antas ikke lenger å være NOK, og lange valutatekster kuttes ikke til tre tegn. Hele svaret valideres før første import; manglende/ugyldig valuta gir 502 med forklaring uten å bruke transaksjonenes duplikatnøkler.
+- Sju nye syntetiske tester; totalt 195 tester, typekontroll, lint og produksjonsbygg passerte. Ingen ekte banksynk kjørt. Dette er ikke produksjonsgodkjenning av bankintegrasjonen.
+
 ## Sesjonstester 23.09.2026
 
 - Åtte nye tester dekker manglende sesjon, SQL-predikater for utløp/aktivt medlemskap/e-postbekreftelse, firmakontekst, hash-lagring, sikre produksjonscookies, lagringsfeil og avgrenset utlogging.

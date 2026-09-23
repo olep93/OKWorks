@@ -41,7 +41,7 @@ it("leaves an overpayment unmatched instead of hiding a possible duplicate", asy
   expect(statements().some((q) => q.startsWith("INSERT INTO invoice_payments"))).toBe(false);
 });
 it("ignores malformed transaction amounts and dates", async () => {
-  mock.provider.mockResolvedValue({ ok: true, value: [{ ...item, amount: "NaN" }, { ...item, bookingDate: "invalid" }] });
+  mock.provider.mockResolvedValue({ ok: true, value: [{ ...item, amount: "NaN", currency: "NOK" }, { ...item, bookingDate: "invalid" }] });
   mock.rows = [[connection], []];
   expect(await (await POST()).json()).toEqual({ imported: 0, matched: 0 });
 });
@@ -49,4 +49,14 @@ it("does not call the provider without a connected bank", async () => {
   mock.rows = [[]];
   expect((await POST()).status).toBe(409);
   expect(mock.provider).not.toHaveBeenCalled();
+});
+it.each([undefined, null, "", "NOK-invalid", "NO", 123])("rejects currency %s before importing any part of the batch", async (currency) => {
+  mock.provider.mockResolvedValue({ ok: true, value: [item, { ...item, id: "invalid", amount: { amount: "60", currency } }] });
+  expect((await POST()).status).toBe(502);
+  expect(statements()).toHaveLength(1);
+  expect(statements().some((q) => q.startsWith("INSERT"))).toBe(false);
+});
+it("normalizes an explicitly supplied currency without guessing it", async () => {
+  mock.provider.mockResolvedValue({ ok: true, value: [{ ...item, amount: { amount: "60", currency: " nok " } }] });
+  expect(await (await POST()).json()).toEqual({ imported: 1, matched: 1 });
 });

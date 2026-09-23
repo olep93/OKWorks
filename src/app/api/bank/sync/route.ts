@@ -39,6 +39,14 @@ export async function POST() {
     const transactions = Array.isArray(response.value)
       ? response.value
       : (response.value?.transactions ?? response.value?.data ?? []);
+    // Validate currency before any import: never guess NOK or truncate a
+    // malformed value into NOK. A rejected batch can safely be retried.
+    if (!Array.isArray(transactions) || transactions.some((item) => {
+      if (!item || typeof item !== "object") return true;
+      const amount = typeof item.amount === "object" && item.amount ? item.amount : null;
+      const currency = amount?.currency ?? item.currency;
+      return typeof currency !== "string" || !/^[A-Z]{3}$/.test(currency.trim().toUpperCase());
+    })) return NextResponse.json({ error: "Banken leverte transaksjoner med manglende eller ugyldig valuta. Ingen transaksjoner ble importert. Prøv igjen senere." }, { status: 502 });
     let imported = 0,
       matched = 0;
     for (const item of transactions as Array<Record<string, unknown>>) {
@@ -75,8 +83,8 @@ export async function POST() {
             new Date().toISOString(),
         ),
       );
-      const currency = String(amountObject?.currency ?? item.currency ?? "NOK")
-        .slice(0, 3)
+      const currency = String(amountObject?.currency ?? item.currency)
+        .trim()
         .toUpperCase();
       if (!Number.isFinite(bookedAt.getTime())) continue;
       // Import and matching must commit together; a failed match must not

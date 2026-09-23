@@ -18,6 +18,8 @@ Ingen ekte betalinger registreres og ingen banksynk kjøres som del av produksjo
 
 ## Neste tester i isolert testmiljø
 
+Valutavern 23.09.2026: banksvar med manglende/ugyldig valutakode avvises før noen import. NOK gjettes ikke lenger ved manglende verdi. Sju nye mock-tester dekker avvisning av hele batchen og normalisering av eksplisitt oppgitt NOK; totalt 195 tester passerte sammen med typekontroll, lint og produksjonsbygg. Ingen ekte banksynk kjørt.
+
 1. Delbetaling, restbetaling og avvisning av overbetaling med syntetiske fakturaer.
 2. Samme UUID sendt samtidig fra to forbindelser: nøyaktig én betalingsrad.
 3. Samtidig bank- og manuell betaling: korrekt saldo uten tapt oppdatering.
