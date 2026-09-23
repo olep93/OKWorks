@@ -2,6 +2,12 @@
 
 Status 17.09.2026: krav og innledende kodegjennomgang, ikke godkjent for 10 000 brukere eller ekte abonnementsbetaling.
 
+## Tilbakestilling av fakturautkast 23.09.2026
+
+- 15 nye rutetester dekker innlogging, firmafiltre på både faktura og ordre, låserekkefølge, blokkering av nummererte/finaliserte/sendte/betalte fakturaer og låste ordre. Kun et tillatt utkast slettes av den testede ruten; kilderegistreringer oppdateres ikke.
+- Totalt 176 tester, typekontroll, lint og produksjonsbygg passerte. Dette er en testutvidelse uten endring i produksjonslogikken eller ekte data.
+- Databasen er mocket: faktisk kaskadesletting, rollback og samtidige forespørsler må fortsatt verifiseres i separat PostgreSQL-testmiljø.
+
 ## Fakturafinalisering 23.09.2026
 
 - Eksplisitt firmafilter på fakturaoppdatering og firma-/ordrefilter på underliggende timer og ordrelinjer. Kildetype skiller timer fra øvrige ordrelinjer.
